@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "@/lib/i18n/context";
 import { useAuth } from "@/lib/auth/context";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -19,14 +19,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -66,7 +65,13 @@ import {
   Trash2,
   Power,
   Search,
+  Building2,
+  UserCheck,
 } from "lucide-react";
+
+type Company = "ENEO" | "KES";
+
+const COMPANIES: Company[] = ["ENEO", "KES"];
 
 const roleLabels: Record<UserRole, string> = {
   admin: "Administrateur",
@@ -80,6 +85,11 @@ const roleBadgeVariants: Record<UserRole, "default" | "secondary" | "destructive
   team_lead: "default",
   validation_agent: "secondary",
   processing_agent: "outline",
+};
+
+const companyBadgeVariants: Record<Company, "default" | "secondary"> = {
+  ENEO: "secondary",
+  KES: "secondary",
 };
 
 export default function UsersPage() {
@@ -101,6 +111,7 @@ export default function UsersPage() {
     lastName: "",
     phone: "",
     department: "",
+    company: "" as Company | "",
     role: "processing_agent" as UserRole,
   });
 
@@ -153,6 +164,7 @@ export default function UsersPage() {
       lastName: "",
       phone: "",
       department: "",
+      company: "",
       role: "processing_agent",
     });
   };
@@ -233,18 +245,20 @@ export default function UsersPage() {
     }
   };
 
-  const openEditDialog = (user: User) => {
+  const openEditSheet = (user: User) => {
     setFormData({
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
       phone: user.phone || "",
       department: user.department || "",
+      company: (user.company as Company) || "",
       role: user.role,
     });
     setEditUser(user);
   };
 
+  // Global stats
   const stats = {
     total: users.length,
     active: users.filter((u) => u.isActive).length,
@@ -252,6 +266,16 @@ export default function UsersPage() {
       users.reduce((acc, u) => acc + u.occupancyRate, 0) / Math.max(users.length, 1)
     ),
   };
+
+  // Per-company KPIs
+  const companyStats = COMPANIES.map((company) => {
+    const companyUsers = users.filter((u) => (u as any).company === company);
+    const activeCount = companyUsers.filter((u) => u.isActive).length;
+    const totalCount = companyUsers.length;
+    const activePercent = totalCount > 0 ? Math.round((activeCount / totalCount) * 100) : 0;
+    const totalPercent = stats.total > 0 ? Math.round((totalCount / stats.total) * 100) : 0;
+    return { company, totalCount, activeCount, activePercent, totalPercent };
+  });
 
   const canManageUsers = hasPermission("manage:users");
 
@@ -270,36 +294,54 @@ export default function UsersPage() {
         </div>
 
         {canManageUsers && (
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={resetForm}>
-                <UserPlus className="h-4 w-4 mr-2" />
-                {t("users.addUser")}
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{t("users.addUser")}</DialogTitle>
-                <DialogDescription>
-                  Créer un nouveau compte utilisateur
-                </DialogDescription>
-              </DialogHeader>
-              <UserForm
-                formData={formData}
-                setFormData={setFormData}
-                t={t}
-              />
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-                  {t("common.cancel")}
-                </Button>
-                <Button onClick={handleCreate} disabled={isProcessing}>
-                  {t("common.create")}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button
+            onClick={() => {
+              resetForm();
+              setIsCreateOpen(true);
+            }}
+          >
+            <UserPlus className="h-4 w-4 mr-2" />
+            {t("users.addUser")}
+          </Button>
         )}
+      </div>
+
+      {/* Company KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {companyStats.map(({ company, totalCount, activeCount, activePercent, totalPercent }) => (
+          <Card key={company}>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+                <Building2 className="h-4 w-4" />
+                {company}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-end justify-between">
+                <div>
+                  <p className="text-3xl font-bold">{totalCount}</p>
+                  <p className="text-xs text-muted-foreground">
+                    utilisateurs ({totalPercent}% du total)
+                  </p>
+                </div>
+                <div className="text-right">
+                  <div className="flex items-center gap-1 justify-end">
+                    <UserCheck className="h-4 w-4 text-green-500" />
+                    <p className="text-xl font-semibold text-green-600">{activeCount}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">actifs</p>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Taux d'activité</span>
+                  <span className="font-medium text-foreground">{activePercent}%</span>
+                </div>
+                <Progress value={activePercent} className="h-2" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Filters */}
@@ -317,7 +359,7 @@ export default function UsersPage() {
           value={roleFilter}
           onValueChange={(value) => setRoleFilter(value as UserRole | "all")}
         >
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-45">
             <SelectValue placeholder={t("common.role")} />
           </SelectTrigger>
           <SelectContent>
@@ -332,15 +374,16 @@ export default function UsersPage() {
       </div>
 
       {/* Users Table */}
-      <Card>
+      <Card className="overflow-x-auto">
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Utilisateur</TableHead>
               <TableHead>{t("common.role")}</TableHead>
+              <TableHead>Entreprise</TableHead>
               <TableHead>{t("users.department")}</TableHead>
               <TableHead>{t("users.occupancyRate")}</TableHead>
-              <TableHead>{t("users.lastLogin")}</TableHead>
               <TableHead>{t("common.status")}</TableHead>
               {canManageUsers && <TableHead className="w-12" />}
             </TableRow>
@@ -351,16 +394,16 @@ export default function UsersPage() {
                 <TableRow key={i}>
                   <TableCell><Skeleton className="h-10 w-40" /></TableCell>
                   <TableCell><Skeleton className="h-6 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-6 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                   <TableCell><Skeleton className="h-2 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-6 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-8 w-8" /></TableCell>
                 </TableRow>
               ))
             ) : filteredUsers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                   {t("common.noData")}
                 </TableCell>
               </TableRow>
@@ -387,6 +430,15 @@ export default function UsersPage() {
                       {roleLabels[user.role]}
                     </Badge>
                   </TableCell>
+                  <TableCell>
+                    {(user as any).company ? (
+                      <Badge variant={companyBadgeVariants[(user as any).company as Company]}>
+                        {(user as any).company}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {user.department || "-"}
                   </TableCell>
@@ -395,9 +447,6 @@ export default function UsersPage() {
                       <Progress value={user.occupancyRate} className="w-16 h-2" />
                       <span className="text-sm">{user.occupancyRate}%</span>
                     </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {formatDate(user.lastLogin)}
                   </TableCell>
                   <TableCell>
                     <Badge variant={user.isActive ? "default" : "secondary"}>
@@ -415,7 +464,7 @@ export default function UsersPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>{t("common.actions")}</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => openEditDialog(user)}>
+                          <DropdownMenuItem onClick={() => openEditSheet(user)}>
                             <Edit className="mr-2 h-4 w-4" />
                             {t("common.edit")}
                           </DropdownMenuItem>
@@ -440,43 +489,86 @@ export default function UsersPage() {
             )}
           </TableBody>
         </Table>
+        </div>
       </Card>
 
-      {/* Edit Dialog */}
-      <Dialog open={!!editUser} onOpenChange={() => setEditUser(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("users.editUser")}</DialogTitle>
-            <DialogDescription>
-              Modifier les informations de l&apos;utilisateur
-            </DialogDescription>
-          </DialogHeader>
-          <UserForm formData={formData} setFormData={setFormData} t={t} />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditUser(null)}>
+      {/* ─── Create Sheet ─── */}
+      <Sheet open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <SheetContent
+          side="right"
+          // Full width on mobile, fixed 480px on sm+
+          className="w-screen! sm:w-120! max-w-none! sm:max-w-120! flex flex-col p-0 overflow-hidden"
+        >
+          <SheetHeader className="px-5 py-4 border-b shrink-0">
+            <SheetTitle className="flex items-center gap-2 text-base">
+              <UserPlus className="h-4 w-4 text-primary shrink-0" />
+              {t("users.addUser")}
+            </SheetTitle>
+            <SheetDescription className="text-sm">
+              Créer un nouveau compte utilisateur
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="flex-1 overflow-y-auto">
+            <UserForm formData={formData} setFormData={setFormData} t={t} />
+          </div>
+
+          <SheetFooter className="px-5 py-4 border-t shrink-0 flex flex-row gap-3 sm:gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setIsCreateOpen(false)}>
               {t("common.cancel")}
             </Button>
-            <Button onClick={handleEdit} disabled={isProcessing}>
+            <Button className="flex-1" onClick={handleCreate} disabled={isProcessing}>
+              {t("common.create")}
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      {/* ─── Edit Sheet ─── */}
+      <Sheet open={!!editUser} onOpenChange={() => setEditUser(null)}>
+        <SheetContent
+          side="right"
+          className="w-screen! sm:w-120! max-w-none! sm:max-w-120! flex flex-col p-0 overflow-hidden"
+        >
+          <SheetHeader className="px-5 py-4 border-b shrink-0">
+            <SheetTitle className="flex items-center gap-2 text-base">
+              <Edit className="h-4 w-4 text-primary shrink-0" />
+              {t("users.editUser")}
+            </SheetTitle>
+            <SheetDescription className="text-sm">
+              Modifier les informations de l&apos;utilisateur
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="flex-1 overflow-y-auto">
+            <UserForm formData={formData} setFormData={setFormData} t={t} />
+          </div>
+
+          <SheetFooter className="px-5 py-4 border-t shrink-0 flex flex-row gap-3 sm:gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setEditUser(null)}>
+              {t("common.cancel")}
+            </Button>
+            <Button className="flex-1" onClick={handleEdit} disabled={isProcessing}>
               {t("common.save")}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
-      {/* Delete Confirmation */}
+      {/* ─── Delete Confirmation ─── */}
       <AlertDialog open={!!deleteUser} onOpenChange={() => setDeleteUser(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-md mx-auto">
           <AlertDialogHeader>
             <AlertDialogTitle>{t("users.deleteUser")}</AlertDialogTitle>
             <AlertDialogDescription>
               {t("users.confirmDelete")}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+          <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <AlertDialogCancel className="w-full sm:w-auto mt-0">{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="w-full sm:w-auto bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {t("common.delete")}
             </AlertDialogAction>
@@ -494,6 +586,7 @@ interface UserFormProps {
     lastName: string;
     phone: string;
     department: string;
+    company: Company | "";
     role: UserRole;
   };
   setFormData: React.Dispatch<React.SetStateAction<UserFormProps["formData"]>>;
@@ -502,82 +595,133 @@ interface UserFormProps {
 
 function UserForm({ formData, setFormData, t }: UserFormProps) {
   return (
-    <div className="grid gap-4 py-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="firstName">{t("users.firstName")}</Label>
-          <Input
-            id="firstName"
-            value={formData.firstName}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, firstName: e.target.value }))
-            }
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="lastName">{t("users.lastName")}</Label>
-          <Input
-            id="lastName"
-            value={formData.lastName}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, lastName: e.target.value }))
-            }
-          />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="email">{t("common.email")}</Label>
-        <Input
-          id="email"
-          type="email"
-          value={formData.email}
-          onChange={(e) =>
-            setFormData((prev) => ({ ...prev, email: e.target.value }))
-          }
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="phone">{t("users.phone")}</Label>
-          <Input
-            id="phone"
-            value={formData.phone}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, phone: e.target.value }))
-            }
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="department">{t("users.department")}</Label>
-          <Input
-            id="department"
-            value={formData.department}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, department: e.target.value }))
-            }
-          />
+    <div className="px-5 py-5 space-y-5">
+
+      {/* Section : Identité */}
+      <div className="space-y-1.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="firstName">{t("users.firstName")}</Label>
+            <Input
+              id="firstName"
+              autoComplete="given-name"
+              value={formData.firstName}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, firstName: e.target.value }))
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="lastName">{t("users.lastName")}</Label>
+            <Input
+              id="lastName"
+              autoComplete="family-name"
+              value={formData.lastName}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, lastName: e.target.value }))
+              }
+            />
+          </div>
         </div>
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="role">{t("common.role")}</Label>
-        <Select
-          value={formData.role}
-          onValueChange={(value) =>
-            setFormData((prev) => ({ ...prev, role: value as UserRole }))
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(roleLabels).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+
+      {/* Section : Contact */}
+      <div className="space-y-1.5">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">{t("common.email")}</Label>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              inputMode="email"
+              value={formData.email}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, email: e.target.value }))
+              }
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="phone">{t("users.phone")}</Label>
+            <Input
+              id="phone"
+              type="tel"
+              autoComplete="tel"
+              inputMode="tel"
+              value={formData.phone}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, phone: e.target.value }))
+              }
+            />
+          </div>
+        </div>
       </div>
+
+      {/* Section : Organisation */}
+      <div className="space-y-1.5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Organisation
+        </p>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="department">{t("users.department")}</Label>
+            <Input
+              id="department"
+              value={formData.department}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, department: e.target.value }))
+              }
+            />
+          </div>
+
+          {/* Entreprise + Rôle : toujours en colonne sur mobile, côte à côte sur sm+ */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="company">Entreprise</Label>
+              {/* w-full force le trigger à occuper toute la cellule */}
+              <Select
+                value={formData.company}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, company: value as Company }))
+                }
+              >
+                <SelectTrigger id="company" className="w-full">
+                  <SelectValue placeholder="Sélectionner" />
+                </SelectTrigger>
+                <SelectContent>
+                  {COMPANIES.map((company) => (
+                    <SelectItem key={company} value={company}>
+                      {company}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="role">{t("common.role")}</Label>
+              <Select
+                value={formData.role}
+                onValueChange={(value) =>
+                  setFormData((prev) => ({ ...prev, role: value as UserRole }))
+                }
+              >
+                <SelectTrigger id="role" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(roleLabels).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }
