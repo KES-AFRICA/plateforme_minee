@@ -35,6 +35,7 @@ export const translations = {
       showing: "Affichage de",
       of: "sur",
       entries: "entrées",
+      data: "données"
     },
     // Auth
     auth: {
@@ -61,9 +62,10 @@ export const translations = {
       settings: "Paramètres",
       profile: "Profil",
       duplicates: "Doublons",
-      differences: "Différences Kobo/Eneo",
-      newKobo: "Nouvelles données Kobo",
-      missingEneo: "Données Eneo manquantes",
+      differences: "Divergence",
+      newKobo: "Nouveaux",
+      missingEneo: "Manquants",
+      complexCases: "Cas Complexes",
     },
     // Roles
     roles: {
@@ -259,6 +261,7 @@ export const translations = {
       showing: "Showing",
       of: "of",
       entries: "entries",
+      data: "data"
     },
     // Auth
     auth: {
@@ -285,9 +288,10 @@ export const translations = {
       settings: "Settings",
       profile: "Profile",
       duplicates: "Duplicates",
-      differences: "Kobo/Eneo Differences",
-      newKobo: "New Kobo Data",
-      missingEneo: "Missing Eneo Data",
+      differences: "Divergences",
+      newKobo: "New",
+      missingEneo: "Missing",
+      complexCases: "Complex Cases",
     },
     // Roles
     roles: {
