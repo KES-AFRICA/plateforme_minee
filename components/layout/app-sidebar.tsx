@@ -47,6 +47,7 @@ import {
   FilePlus,
   FileX,
   User,
+  AlertCircle,
 } from "lucide-react";
 
 const roleLabels: Record<string, string> = {
@@ -92,6 +93,11 @@ export function AppSidebar() {
           title: t("nav.missingEneo"),
           url: "/processing/missing-eneo",
           icon: FileX,
+        },
+        {
+          title: t("nav.complexCases"),
+          url: "/processing/complex",
+          icon: AlertCircle,
         },
       ],
     },

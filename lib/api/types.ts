@@ -154,3 +154,44 @@ export interface LoginResponse {
   user: User;
   token: string;
 }
+
+// Geographic and Administrative Divisions
+export interface ElectricRegion {
+  id: string;
+  name: string; 
+  code: string; 
+  city: string;
+}
+
+export interface TaskStatsByRegion {
+  region: ElectricRegion;
+  totalTasks: number;
+  pending: number;
+  inProgress: number;
+  completed: number;
+  validated: number;
+  rejected: number;
+  completionRate: number;
+}
+
+export interface TaskStatsByCity {
+  city: string;
+  regions: ElectricRegion[];
+  totalTasks: number;
+  pending: number;
+  completionRate: number;
+}
+
+export interface TaskStatsByZone {
+  zone: string;
+  totalTasks: number;
+  completed: number;
+}
+
+export interface TaskStatsByExploitation {
+  exploitationId: string;
+  exploitationName: string;
+  totalTasks: number;
+  completed: number;
+  avgProcessingTime: number;
+}

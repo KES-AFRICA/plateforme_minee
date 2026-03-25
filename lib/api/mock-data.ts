@@ -8,6 +8,11 @@ import {
   GeoPoint,
   Region,
   Notification,
+  TaskStatsByExploitation,
+  TaskStatsByZone,
+  TaskStatsByCity,
+  TaskStatsByRegion,
+  ElectricRegion,
 } from "./types";
 
 // Mock Users
@@ -446,4 +451,122 @@ export const mockNotifications: Notification[] = [
     isRead: true,
     createdAt: "2024-03-17T12:00:00Z",
   },
+];
+
+// Electric Regions (ENEO Organization)
+export const mockElectricRegions: ElectricRegion[] = [
+  { id: "er-001", name: "Région Électrique Douala Ouest", code: "RDUO", city: "Douala" },
+  { id: "er-002", name: "Région Électrique Douala Est", code: "RDUE", city: "Douala" },
+  { id: "er-003", name: "Région Électrique Douala Centre", code: "RDUC", city: "Douala" },
+  { id: "er-004", name: "Région Électrique Yaoundé Nord", code: "RYN", city: "Yaoundé" },
+  { id: "er-005", name: "Région Électrique Yaoundé Sud", code: "RYS", city: "Yaoundé" },
+  { id: "er-006", name: "Région Électrique Yaoundé Centre", code: "RYC", city: "Yaoundé" },
+  { id: "er-007", name: "Région Électrique Garoua", code: "RG", city: "Garoua" },
+  { id: "er-008", name: "Région Électrique Bamenda", code: "RB", city: "Bamenda" },
+  { id: "er-009", name: "Région Électrique Buea", code: "RBU", city: "Buea" },
+  { id: "er-010", name: "Région Électrique Bertoua", code: "RBE", city: "Bertoua" },
+];
+
+// Task Stats by Region
+export const mockTaskStatsByRegion: TaskStatsByRegion[] = [
+  {
+    region: mockElectricRegions[0],
+    totalTasks: 234,
+    pending: 45,
+    inProgress: 28,
+    completed: 145,
+    validated: 140,
+    rejected: 16,
+    completionRate: 62,
+  },
+  {
+    region: mockElectricRegions[1],
+    totalTasks: 198,
+    pending: 32,
+    inProgress: 25,
+    completed: 128,
+    validated: 122,
+    rejected: 13,
+    completionRate: 65,
+  },
+  {
+    region: mockElectricRegions[2],
+    totalTasks: 167,
+    pending: 28,
+    inProgress: 18,
+    completed: 112,
+    validated: 108,
+    rejected: 9,
+    completionRate: 67,
+  },
+  {
+    region: mockElectricRegions[3],
+    totalTasks: 245,
+    pending: 52,
+    inProgress: 35,
+    completed: 148,
+    validated: 142,
+    rejected: 10,
+    completionRate: 60,
+  },
+  {
+    region: mockElectricRegions[4],
+    totalTasks: 212,
+    pending: 38,
+    inProgress: 22,
+    completed: 137,
+    validated: 132,
+    rejected: 15,
+    completionRate: 65,
+  },
+];
+
+// Task Stats by City
+export const mockTaskStatsByCity: TaskStatsByCity[] = [
+  {
+    city: "Douala",
+    regions: mockElectricRegions.slice(0, 3),
+    totalTasks: 599,
+    pending: 105,
+    completionRate: 65,
+  },
+  {
+    city: "Yaoundé",
+    regions: mockElectricRegions.slice(3, 6),
+    totalTasks: 512,
+    pending: 92,
+    completionRate: 63,
+  },
+  {
+    city: "Garoua",
+    regions: [mockElectricRegions[6]],
+    totalTasks: 156,
+    pending: 28,
+    completionRate: 58,
+  },
+  {
+    city: "Bamenda",
+    regions: [mockElectricRegions[7]],
+    totalTasks: 134,
+    pending: 24,
+    completionRate: 61,
+  },
+];
+
+// Task Stats by Zone
+export const mockTaskStatsByZone: TaskStatsByZone[] = [
+  { zone: "Zone Résidentielle Nord", totalTasks: 234, completed: 145 },
+  { zone: "Zone Commerciale", totalTasks: 189, completed: 128 },
+  { zone: "Zone Industrielle", totalTasks: 156, completed: 92 },
+  { zone: "Zone Administrative", totalTasks: 98, completed: 67 },
+  { zone: "Zone Rurale", totalTasks: 145, completed: 78 },
+];
+
+// Task Stats by Exploitation
+export const mockTaskStatsByExploitation: TaskStatsByExploitation[] = [
+  { exploitationId: "exp-001", exploitationName: "Exploitation Douala Centre", totalTasks: 128, completed: 89, avgProcessingTime: 2.1 },
+  { exploitationId: "exp-002", exploitationName: "Exploitation Douala Ouest", totalTasks: 112, completed: 78, avgProcessingTime: 1.9 },
+  { exploitationId: "exp-003", exploitationName: "Exploitation Yaoundé Nord", totalTasks: 145, completed: 98, avgProcessingTime: 2.3 },
+  { exploitationId: "exp-004", exploitationName: "Exploitation Yaoundé Centre", totalTasks: 134, completed: 92, avgProcessingTime: 2.0 },
+  { exploitationId: "exp-005", exploitationName: "Exploitation Garoua", totalTasks: 87, completed: 52, avgProcessingTime: 2.8 },
 ];
