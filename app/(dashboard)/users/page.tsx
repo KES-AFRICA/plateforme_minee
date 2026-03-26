@@ -380,11 +380,11 @@ export default function UsersPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Utilisateur</TableHead>
-              <TableHead>{t("common.role")}</TableHead>
-              <TableHead>Entreprise</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>{t("users.lastLogin")}</TableHead>
-              <TableHead>{t("common.status")}</TableHead>
+              <TableHead className="text-center">{t("common.role")}</TableHead>
+              <TableHead className="text-center">Entreprise</TableHead>
+              <TableHead className="text-center">{t("users.lastLogin")}</TableHead>
+              <TableHead className="text-center">Activité</TableHead>
+              <TableHead className="text-center">{t("common.status")}</TableHead>
               {canManageUsers && <TableHead className="w-12" />}
             </TableRow>
           </TableHeader>
@@ -426,12 +426,12 @@ export default function UsersPage() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">
                     <Badge variant={roleBadgeVariants[user.role]}>
                       {roleLabels[user.role]}
                     </Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">
                     {(user as any).company ? (
                       <Badge variant={companyBadgeVariants[(user as any).company as Company]}>
                         {(user as any).company}
@@ -440,16 +440,16 @@ export default function UsersPage() {
                       <span className="text-muted-foreground">-</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    
+                  <TableCell className="text-center text-muted-foreground">
+                    {formatDate(user.lastLogin)}
+                  </TableCell>
+                  <TableCell className="text-center text-muted-foreground">
                     <div className={`rounded-2xl text-center p-1 ${user.status=="en ligne" ? "bg-green-200 text-green-800" : "bg-red-200 text-red-800"}`}>
                       {user.status || "-"}
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {formatDate(user.lastLogin)}
-                  </TableCell>
-                  <TableCell>
+
+                  <TableCell className="text-center">
                     <Badge variant={user.isActive ? "default" : "secondary"}>
                       {user.isActive ? t("users.active") : t("users.inactive")}
                     </Badge>
