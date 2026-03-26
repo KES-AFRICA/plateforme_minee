@@ -593,7 +593,7 @@ export const mockActivity: ActivityItem[] = [
     id: "act-012",
     type: "task_completed",
     description: "Doublon traité - Compteur #A2345",
-    timestamp: "2026-03-23T10:30:00Z",
+    timestamp: "2026-03-26T10:30:00Z",
     userId: "4",
     user: mockUsers[3],
     taskId: "task-001",
