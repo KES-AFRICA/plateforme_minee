@@ -134,15 +134,10 @@ export function AppSidebar() {
       {/* Header */}
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-sidebar-primary/20">
-            <div className="flex">
-              <Droplets className="w-4 h-4 text-sidebar-primary" />
-              <Zap className="w-4 h-4 text-sidebar-primary -ml-1" />
-            </div>
-          </div>
+
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
             <span className="font-bold text-sidebar-foreground">TADEC</span>
-            <span className="text-xs text-sidebar-foreground/60">Traitement & Distribution</span>
+            {/* <span className="text-xs text-sidebar-foreground/60">Traitement & Distribution</span> */}
           </div>
         </div>
       </SidebarHeader>
@@ -152,7 +147,7 @@ export function AppSidebar() {
       {/* Main Navigation */}
       <SidebarContent className="dark-scrollbar">
         <SidebarGroup>
-          <SidebarGroupLabel>{t("nav.dashboard")}</SidebarGroupLabel>
+          {/* <SidebarGroupLabel>{t("nav.dashboard")}</SidebarGroupLabel> */}
           <SidebarGroupContent>
             <SidebarMenu>
               {filteredNavItems.map((item) =>

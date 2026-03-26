@@ -12,8 +12,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Spinner } from "@/components/ui/spinner";
 import { LanguageSwitch } from "@/components/shared/language-switch";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
-import { Droplets, Zap, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { AlertCircle, Eye, EyeOff, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -46,43 +52,44 @@ export default function LoginPage() {
     }
   };
 
+  const demoAccounts = [
+    { role: "Admin", email: "admin@minee.cm", password: "admin123" },
+    { role: "Chef d'équipe", email: "marie.ekotto@minee.cm", password: "team123" },
+    { role: "Agent validation", email: "paul.mvondo@minee.cm", password: "valid123" },
+    { role: "Agent traitement", email: "agnes.fotso@minee.cm", password: "process123" },
+  ];
+
+  const handleDemoSelect = (email: string, password: string) => {
+    setEmail(email);
+    setPassword(password);
+    toast.info(`Compte ${email.split('@')[0]} sélectionné`, {
+      description: "Cliquez sur Se connecter pour continuer",
+    });
+  };
+
   return (
-    <div className="min-h-screen flex">
-      {/* Left Panel - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-sidebar text-sidebar-foreground relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-sidebar via-sidebar to-sidebar-accent opacity-90" />
+    <div className="h-screen flex overflow-hidden">
+      {/* Left Panel - Fixed with dark overlay */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden fixed lg:relative lg:h-full">
         
-        {/* Decorative Elements */}
-        <div className="absolute top-20 right-20 w-64 h-64 rounded-full bg-sidebar-primary/10 blur-3xl" />
-        <div className="absolute bottom-20 left-20 w-96 h-96 rounded-full bg-sidebar-primary/5 blur-3xl" />
         
-        <div className="relative z-10 flex flex-col justify-between p-12 w-full">
+        <img
+          src="/images/login-cover.png"
+          alt="image de fond"
+          className="absolute w-full h-full object-cover"
+        />
+
+         <div className="absolute inset-0 bg-black/30" />
+        
+        <div className="relative flex flex-col justify-between p-12 w-full z-10">
           <div>
-            {/* Logo */}
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-sidebar-primary/20 border border-sidebar-border">
-                <Droplets className="w-6 h-6 text-sidebar-primary" />
-              </div>
-              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-sidebar-primary/20 border border-sidebar-border">
-                <Zap className="w-6 h-6 text-sidebar-primary" />
-              </div>
-            </div>
-            
-            <h1 className="mt-8 text-4xl font-bold tracking-tight text-balance">
-              TADEC
+            <h1 className="mt-2 text-2xl text-center font-bold text-white">
+              PLATEFORME DE TRAITEMENT DES DONNEES DE COLLECTE DES ACTIFS DE DISTRIBUTION ELECTRIQUE ET COMMERCIAL
             </h1>
-            <p className="mt-2 text-lg text-sidebar-foreground/70">
-              {t("auth.welcomeMessage")}
-            </p>
           </div>
 
           <div className="space-y-6">
-            {/* Features */}
             <div className="grid gap-4">
-              <FeatureItem
-                title="Collecte de Données"
-                description="Intégration Kobo et Eneo"
-              />
               <FeatureItem
                 title="Traitement Intelligent"
                 description="Détection automatique des anomalies"
@@ -92,51 +99,51 @@ export default function LoginPage() {
                 description="Préparation pour cartographie"
               />
             </div>
-
-            {/* Footer */}
-            <div className="pt-8 border-t border-sidebar-border/50">
-              <p className="text-sm text-sidebar-foreground/50">
-                Ministère de l&apos;Eau et de l&apos;Énergie
-              </p>
-              <p className="text-xs text-sidebar-foreground/40 mt-1">
-                République du Cameroun
-              </p>
-            </div>
           </div>
         </div>
       </div>
 
-      {/* Right Panel - Login Form */}
-      <div className="flex-1 flex items-center justify-center p-6 bg-background">
-        <div className="w-full max-w-md">
-          {/* Header Controls */}
+      {/* Right Panel - Scrollable */}
+      <div className="flex-1 flex items-start justify-center p-4 bg-background overflow-y-auto h-full">
+        <div className="w-full max-w-md my-auto py-2">
+          {/* Header Controls 
           <div className="flex justify-end gap-2 mb-8">
             <LanguageSwitch />
             <ThemeToggle />
-          </div>
+          </div>*/}
 
           {/* Mobile Logo */}
-          <div className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10">
-              <Droplets className="w-5 h-5 text-primary" />
-            </div>
-            <span className="text-xl font-bold">TADEC</span>
-          </div>
+<div className="flex items-center justify-center w-full mx-auto mb-2 sm:mb-4 md:mb-6">
+  <div className="flex flex-wrap gap-2 sm:gap-4 items-center justify-center">
+    <img
+      src="/logos/eneo.jpg"
+      alt="eneo"
+      className="w-20 sm:w-28  h-12 sm:h-16 object-contain"
+    />
+    <img
+      src="/logos/minee.png"
+      alt="minee"
+      className="w-20 sm:w-28  h-20 sm:h-28  object-contain"
+    />
+    <img
+      src="/logos/arsel.png"
+      alt="arsel"
+      className="w-20 sm:w-28  h-12 sm:h-16  object-contain"
+    />
+  </div>
+</div>
 
           <Card className="border-border/50 shadow-lg">
-            <CardHeader className="space-y-1 pb-6">
+            <CardHeader className="space-y-1 ">
               <CardTitle className="text-2xl font-semibold tracking-tight">
                 {t("auth.login")}
               </CardTitle>
-              <CardDescription className="text-muted-foreground">
-                {t("auth.signInSubtitle")}
-              </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-2">
                 {error && (
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{error}</span>
                   </div>
                 )}
@@ -228,17 +235,35 @@ export default function LoginPage() {
                 </Button>
               </form>
 
-              {/* Demo Credentials */}
-              <div className="mt-6 p-4 rounded-lg bg-muted/50 border border-border/50">
-                <p className="text-xs font-medium text-muted-foreground mb-2">
-                  Comptes de démonstration :
+              {/* Demo Credentials - Dropdown */}
+              <div className="mt-6">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      className="w-full justify-between"
+                      disabled={isLoading}
+                    >
+                      <span>Comptes de démonstration</span>
+                      <ChevronDown className="h-4 w-4 opacity-50" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                    {demoAccounts.map((account, index) => (
+                      <DropdownMenuItem
+                        key={index}
+                        onClick={() => handleDemoSelect(account.email, account.password)}
+                        className="flex flex-col items-start py-2 cursor-pointer"
+                      >
+                        <span className="font-medium">{account.role}</span>
+                        <span className="text-xs text-muted-foreground">{account.email}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <p className="text-xs text-muted-foreground mt-2 text-center">
+                  Sélectionnez un compte pour remplir automatiquement les champs
                 </p>
-                <div className="space-y-1 text-xs text-muted-foreground">
-                  <p><span className="font-medium">Admin:</span> admin@minee.cm / admin123</p>
-                  <p><span className="font-medium">Chef d&apos;équipe:</span> marie.ekotto@minee.cm / team123</p>
-                  <p><span className="font-medium">Agent validation:</span> paul.mvondo@minee.cm / valid123</p>
-                  <p><span className="font-medium">Agent traitement:</span> agnes.fotso@minee.cm / process123</p>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -250,11 +275,11 @@ export default function LoginPage() {
 
 function FeatureItem({ title, description }: { title: string; description: string }) {
   return (
-    <div className="flex items-start gap-3 p-3 rounded-lg bg-sidebar-accent/30 border border-sidebar-border/50">
+    <div className="flex items-start gap-3 p-3 rounded-lg bg-sidebar-accent/30 border border-sidebar-border/50 backdrop-blur-sm">
       <div className="w-2 h-2 rounded-full bg-sidebar-primary mt-2" />
       <div>
-        <p className="font-medium text-sidebar-foreground">{title}</p>
-        <p className="text-sm text-sidebar-foreground/60">{description}</p>
+        <p className="font-medium text-white">{title}</p>
+        <p className="text-sm text-white/90">{description}</p>
       </div>
     </div>
   );
