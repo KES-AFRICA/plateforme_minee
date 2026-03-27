@@ -1,6 +1,6 @@
-"use client";
+ "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useI18n } from "@/lib/i18n/context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,13 +10,21 @@ import { DepartureCard } from "@/components/complex-cases/departure-card";
 import { PeriodFilter, PeriodType } from "@/components/complex-cases/period-filter";
 import { GlobalStatsCards } from "@/components/complex-cases/global-stats-cards";
 import { NavigationBreadcrumb, BreadcrumbItem } from "@/components/complex-cases/navigation-breadcrumb";
-import { eneoRegions, getRegionStats, getZoneStats, EneoRegion, EneoZone, EneoDeparture } from "@/lib/api/eneo-data";
-import { Search, Copy, CheckCircle, XCircle, GitMerge } from "lucide-react";
+import { Search, Copy, CheckCircle, XCircle, GitMerge, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { 
+  eneoRegions,
+  getAnomaliesByFeeder,
+  EneoRegion, 
+  EneoZone, 
+  EneoDeparture,
+  AnomalyCase
+} from "@/lib/api/eneo-data";
+import { layer2DB } from "@/data/layer2";
 
 type ViewLevel = "regions" | "zones" | "departures" | "duplicates";
 
-// Types pour les doublons
+// Type pour les doublons basé sur les anomalies réelles
 interface DuplicateRecord {
   id: string;
   code: string;
@@ -26,64 +34,130 @@ interface DuplicateRecord {
   status: "pending" | "reviewing" | "merged" | "rejected";
   detectedAt: string;
   assignedTo?: string;
+  rawAnomaly: AnomalyCase;
 }
 
 interface DuplicateItem {
   id: string;
   code: string;
-  source: string;
   date: string;
-  value: string;
+  localisation: string;
+  equipmentType: string;
+  equipmentData: Record<string, unknown>;
 }
 
-// Générer des doublons mock
-function generateMockDuplicates(departureId: string, count: number): DuplicateRecord[] {
-  const types = [
-    "Compteur client",
-    "Facture mensuelle",
-    "Relevé terrain",
-    "Contrat client",
-    "Point de livraison"
+// Convertir une anomalie de type "duplicate" en DuplicateRecord
+function convertAnomalyToDuplicate(anomaly: AnomalyCase): DuplicateRecord | null {
+  if (anomaly.type !== "duplicate") return null;
+  
+  // Pour un doublon, on a layer2Record (le premier doublon) et duplicateOf (l'ID de l'autre doublon)
+  const firstRecord = anomaly.layer2Record;
+  const otherId = anomaly.duplicateOf;
+  
+  if (!firstRecord) {
+    console.warn("Doublon sans enregistrement", anomaly);
+    return null;
+  }
+  
+  // Récupérer l'autre enregistrement en double depuis layer2DB
+  let secondRecord = null;
+  if (otherId) {
+    const tableRecords = layer2DB[anomaly.table] as unknown as Array<Record<string, unknown>>;
+    secondRecord = tableRecords.find(r => String(r.m_rid) === String(otherId));
+  }
+  
+  // Construire les deux items à afficher
+  const duplicateItems: DuplicateItem[] = [
+    {
+      id: firstRecord.m_rid?.toString() || firstRecord.id?.toString() || "dup1",
+      code: firstRecord.code?.toString() || firstRecord.name?.toString() || "N/A",
+      date: firstRecord.created_date?.toString()?.split('T')[0] || "N/A",
+      localisation: firstRecord.localisation?.toString() || "N/A",
+      equipmentType: anomaly.table,
+      equipmentData: firstRecord
+    }
   ];
   
-  const sources = ["SAP", "CRM", "Relevé terrain", "Facturation", "Gestion technique"];
-  const statuses: DuplicateRecord["status"][] = ["pending", "reviewing", "merged", "rejected"];
-  const users = ["Jean Dupont", "Marie Kouam", "Paul Ndi", "Claire Biya", undefined];
-
-  const duplicates: DuplicateRecord[] = [];
-
-  for (let i = 0; i < count; i++) {
-    const detectedDate = new Date(Date.now() - Math.floor(Math.random() * 30 * 24 * 60 * 60 * 1000));
-    const similarity = 85 + Math.floor(Math.random() * 15);
-    
-    duplicates.push({
-      id: `${departureId}-dup-${i + 1}`,
-      code: `DUP-${departureId.toUpperCase()}-${String(i + 1).padStart(3, "0")}`,
-      type: types[Math.floor(Math.random() * types.length)],
-      records: [
-        {
-          id: `rec-${i}-1`,
-          code: `${departureId.toUpperCase()}-${String(i + 1).padStart(3, "0")}-A`,
-          source: sources[Math.floor(Math.random() * sources.length)],
-          date: new Date(Date.now() - Math.floor(Math.random() * 90 * 24 * 60 * 60 * 1000)).toLocaleDateString("fr-FR"),
-          value: `${Math.floor(Math.random() * 10000)} kWh`
-        },
-        {
-          id: `rec-${i}-2`,
-          code: `${departureId.toUpperCase()}-${String(i + 1).padStart(3, "0")}-B`,
-          source: sources[Math.floor(Math.random() * sources.length)],
-          date: new Date(Date.now() - Math.floor(Math.random() * 90 * 24 * 60 * 60 * 1000)).toLocaleDateString("fr-FR"),
-          value: `${Math.floor(Math.random() * 10000)} kWh`
-        }
-      ],
-      similarity,
-      status: statuses[Math.floor(Math.random() * statuses.length)],
-      detectedAt: detectedDate.toLocaleDateString("fr-FR"),
-      assignedTo: users[Math.floor(Math.random() * users.length)],
+  if (secondRecord) {
+    duplicateItems.push({
+      id: secondRecord.m_rid?.toString() || secondRecord.id?.toString() || "dup2",
+      code: secondRecord.code?.toString() || secondRecord.name?.toString() || "N/A",
+      date: secondRecord.created_date?.toString()?.split('T')[0] || "N/A",
+      localisation: secondRecord.localisation?.toString() || "N/A",
+      equipmentType: anomaly.table,
+      equipmentData: secondRecord
     });
   }
+  
+  // Calculer le taux de similarité
+  const similarity = secondRecord 
+    ? calculateSimilarity(firstRecord, secondRecord)
+    : 100;
+  
+  // Générer un code unique pour le doublon
+  const code1 = duplicateItems[0].code;
+  const code2 = duplicateItems[1]?.code || "unknown";
+  const shortCode1 = code1.length > 15 ? code1.substring(0, 15) : code1;
+  const shortCode2 = code2.length > 15 ? code2.substring(0, 15) : code2;
+  
+  return {
+    id: anomaly.id,
+    code: `DUP-${shortCode1}-${shortCode2}`,
+    type: getEquipmentTypeLabel(anomaly.table),
+    records: duplicateItems,
+    similarity,
+    status: "pending",
+    detectedAt: new Date().toISOString().split('T')[0],
+    assignedTo: undefined,
+    rawAnomaly: anomaly
+  };
+}
 
-  return duplicates;
+// Extraire une valeur représentative pour l'affichage
+function getEquipmentValue(record: Record<string, unknown>): string {
+  if (record.name) return record.name.toString();
+  if (record.label) return record.label.toString();
+  if (record.value) return record.value.toString();
+  if (record.code) return record.code.toString();
+  return "Valeur non définie";
+}
+
+// Calculer le taux de similarité entre deux enregistrements
+function calculateSimilarity(record1: Record<string, unknown>, record2: Record<string, unknown>): number {
+  let matchingFields = 0;
+  let totalFields = 0;
+  
+  const fieldsToCompare = ["name", "code", "type", "voltage", "active", "status", "localisation"];
+  
+  for (const field of fieldsToCompare) {
+    const val1 = record1[field];
+    const val2 = record2[field];
+    
+    if (val1 !== undefined && val2 !== undefined) {
+      totalFields++;
+      if (String(val1).toLowerCase().trim() === String(val2).toLowerCase().trim()) {
+        matchingFields++;
+      }
+    }
+  }
+  
+  if (totalFields === 0) return 85;
+  return Math.round((matchingFields / totalFields) * 100);
+}
+
+// Obtenir le libellé du type d'équipement
+function getEquipmentTypeLabel(table: string): string {
+  const labels: Record<string, string> = {
+    substation: "Poste source",
+    powertransformer: "Transformateur",
+    busbar: "Jeu de barres",
+    bay: "Départ",
+    switch: "Disjoncteur",
+    wire: "Ligne",
+    pole: "Poteau",
+    node: "Nœud réseau"
+  };
+  return labels[table] || table;
 }
 
 // Composant pour afficher les doublons
@@ -98,7 +172,7 @@ function DuplicateTable({
 }: { 
   duplicates: DuplicateRecord[];
   onView: (duplicate: DuplicateRecord) => void;
-  onMerge: (duplicate: DuplicateRecord) => void;
+  onMerge: (duplicate: DuplicateRecord, keepId: string) => void;
   onKeep: (duplicate: DuplicateRecord) => void;
   onDiscard: (duplicate: DuplicateRecord) => void;
   onReview: (duplicate: DuplicateRecord) => void;
@@ -121,8 +195,8 @@ function DuplicateTable({
     switch (status) {
       case "pending": return "En attente";
       case "reviewing": return "En revue";
-      case "merged": return "Fusionné";
-      case "rejected": return "Rejeté";
+      case "merged": return "Fusionnés";
+      case "rejected": return "Rejetés";
       default: return status;
     }
   };
@@ -185,8 +259,8 @@ function DuplicateTable({
         )}
       </div>
 
-      <div className="border rounded-lg overflow-hidden">
-        <table className="w-full">
+      <div className="border rounded-lg overflow-x-auto">
+        <table className="w-full min-w-[800px]">
           <thead className="bg-muted/50">
             <tr className="border-b">
               <th className="w-8 p-3">
@@ -197,13 +271,11 @@ function DuplicateTable({
                   className="rounded border-gray-300"
                 />
               </th>
-              <th className="text-left p-3 font-medium">Code</th>
-              <th className="text-left p-3 font-medium">Type</th>
+              <th className="text-left p-3 font-medium">Code doublon</th>
+              <th className="text-left p-3 font-medium">Type équipement</th>
               <th className="text-left p-3 font-medium">Enregistrements</th>
               <th className="text-left p-3 font-medium">Similarité</th>
               <th className="text-left p-3 font-medium">Statut</th>
-              <th className="text-left p-3 font-medium">Détecté le</th>
-              <th className="text-left p-3 font-medium">Assigné à</th>
               <th className="text-left p-3 font-medium">Actions</th>
             </tr>
           </thead>
@@ -225,7 +297,9 @@ function DuplicateTable({
                     {duplicate.records.map((record, idx) => (
                       <div key={record.id} className="text-sm">
                         <span className="font-mono">{record.code}</span>
-                        <span className="text-muted-foreground ml-2">({record.source})</span>
+                        <span className="text-muted-foreground ml-2">
+                          {record.localisation}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -240,28 +314,18 @@ function DuplicateTable({
                     {getStatusLabel(duplicate.status)}
                   </span>
                 </td>
-                <td className="p-3 text-sm">{duplicate.detectedAt}</td>
-                <td className="p-3 text-sm">{duplicate.assignedTo || "Non assigné"}</td>
                 <td className="p-3">
                   <div className="flex gap-2">
                     <button
                       onClick={() => onView(duplicate)}
-                      className="text-blue-600 hover:text-blue-800 text-sm"
+                      className="text-blue-600 hover:text-blue-800 text-sm cursor-pointer"
                     >
                       Voir
                     </button>
-                    {duplicate.status === "pending" && (
-                      <button
-                        onClick={() => onReview(duplicate)}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        Analyser
-                      </button>
-                    )}
                     {duplicate.status === "reviewing" && (
                       <>
                         <button
-                          onClick={() => onMerge(duplicate)}
+                          onClick={() => onMerge(duplicate,duplicate.id)}
                           className="text-green-600 hover:text-green-800 text-sm flex items-center gap-1"
                         >
                           <GitMerge className="h-3 w-3" />
@@ -283,13 +347,14 @@ function DuplicateTable({
         </table>
         {filteredDuplicates.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
-            Aucun doublon trouvé
+            Aucun doublon trouvé pour ce départ
           </div>
         )}
       </div>
     </div>
   );
 }
+
 
 // Modal pour les détails d'un doublon
 function DuplicateDetailModal({ 
@@ -303,109 +368,269 @@ function DuplicateDetailModal({
   duplicate: DuplicateRecord | null;
   isOpen: boolean;
   onClose: () => void;
-  onMerge: (duplicate: DuplicateRecord) => void;
+  onMerge: (duplicate: DuplicateRecord, keepId: string) => void;
   onKeep: (duplicate: DuplicateRecord) => void;
   onDiscard: (duplicate: DuplicateRecord) => void;
 }) {
-  const [selectedRecord, setSelectedRecord] = useState<string | null>(null);
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
 
   if (!isOpen || !duplicate) return null;
 
   const handleMerge = () => {
-    if (selectedRecord) {
-      onMerge(duplicate);
+    if (selectedRecordId) {
+      onMerge(duplicate,selectedRecordId);
     } else {
       toast.warning("Veuillez sélectionner l'enregistrement à conserver");
     }
   };
 
+  const handleKeepBoth = () => {
+    toast.info("Conservation des deux enregistrements");
+    onKeep(duplicate);
+  };
+
+  // Fonction pour formater une valeur pour l'affichage
+  const formatValue = (value: unknown): string => {
+    if (value === null || value === undefined) return "—";
+    if (typeof value === "boolean") return value ? "Oui" : "Non";
+    if (value instanceof Date) return value.toLocaleString();
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  };
+
+  // Fonction pour obtenir un libellé lisible pour un champ
+  const getFieldLabel = (key: string): string => {
+    const labels: Record<string, string> = {
+      // ========== CHAMPS COMMUNS ==========
+      m_rid: "ID unique",
+      name: "Nom",
+      code: "Code",
+      active: "Actif",
+      created_date: "Date de création",
+      display_scada: "Affiché SCADA",
+      
+      // ========== FEEDER (Départ) ==========
+      voltage: "Tension (kV)",
+      is_injection: "Injection",
+      local_name: "Nom local",
+      
+      // ========== SUBSTATION (Poste) ==========
+      highest_voltage_level: "Niveau tension max",
+      second_substation_id: "ID poste secondaire",
+      exploitation: "Exploitation",
+      latitude: "Latitude",
+      longitude: "Longitude",
+      localisation: "Localisation",
+      regime: "Régime",
+      type: "Type",
+      zone_type: "Type de zone",
+      security_zone_id: "Zone de sécurité",
+      feeder_id: "Départ associé",
+      
+      // ========== POWERTRANSFORMER (Transformateur) ==========
+      apparent_power: "Puissance apparente (kVA)",
+      substation_id: "Poste source",
+      t1: "Terminal 1",
+      t2: "Terminal 2",
+      w1_voltage: "Tension enroulement 1 (kV)",
+      w2_voltage: "Tension enroulement 2 (kV)",
+      
+      // ========== BUSBAR (Jeu de barres) ==========
+      phase: "Phase",
+      is_feederhead: "Tête de départ",
+      
+      // ========== BAY (Travée) ==========
+      busbar_id1: "Jeu de barres 1",
+      busbar_id2: "Jeu de barres 2",
+      
+      // ========== SWITCH (Appareillage) ==========
+      bay_mrid: "Travée",
+      nature: "Nature",
+      normal_open: "Normalement ouvert",
+      second_switch_id: "ID secondaire",
+      pole_mrid: "Poteau",
+      
+      // ========== WIRE (Conducteur) ==========
+      nature_conducteur: "Nature conducteur",
+      section: "Section",
+      
+      // ========== POLE (Poteau) ==========
+      height: "Hauteur (m)",
+      //longitude: "Longitude",
+      lattitude: "Latitude",
+      is_derivation: "Dérivation",
+      installation_date: "Date installation",
+      lastvisit_date: "Dernière visite",
+      
+      // ========== NODE (Nœud) ==========
+      pole_id: "Poteau",
+    };
+    return labels[key] || key;
+  };
+
+  // Exclure les champs trop longs ou techniques
+  const isImportantField = (key: string): boolean => {
+    const excludeFields = ["geometry", "geom", "coordinates", "shape", "polygon", "multipolygon"];
+    return !excludeFields.some(f => key.toLowerCase().includes(f));
+  };
+
+  // Récupérer tous les champs de l'enregistrement, triés
+  const getAllFields = (record: Record<string, unknown>) => {
+    return Object.entries(record)
+      .filter(([key]) => isImportantField(key))
+      .sort((a, b) => a[0].localeCompare(b[0]));
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+      <div className="bg-white rounded-lg p-6 max-w-6xl w-full h-[95vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <Copy className="h-5 w-5" />
-            Détails du doublon
+            Fusion de doublon
           </h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
             ✕
           </button>
         </div>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-3">
+          {/* Informations générales */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Code</label>
-              <p className="font-mono">{duplicate.code}</p>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Code doublon
+              </label>
+              <p className="font-mono text-sm font-medium">{duplicate.code}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Type</label>
-              <p>{duplicate.type}</p>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Type équipement
+              </label>
+              <p className="font-medium">{duplicate.type}</p>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Taux de similarité
+              </label>
+              <p className={`font-semibold ${
+                duplicate.similarity >= 95 ? "text-red-600" :
+                duplicate.similarity >= 90 ? "text-orange-600" :
+                duplicate.similarity >= 85 ? "text-yellow-600" :
+                "text-blue-600"
+              }`}>
+                {duplicate.similarity}%
+              </p>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Date détection
+              </label>
+              <p className="text-sm">{duplicate.detectedAt}</p>
             </div>
           </div>
 
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Similarité</label>
-            <div className="mt-1">
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-600 h-2 rounded-full" 
-                  style={{ width: `${duplicate.similarity}%` }}
-                />
-              </div>
-              <p className="text-sm mt-1">{duplicate.similarity}% de similarité</p>
-            </div>
-          </div>
-
+          {/* Enregistrements en double - Vue complète */}
           <div>
             <label className="text-sm font-medium text-muted-foreground mb-2 block">
-              Enregistrements en conflit
+              Enregistrements en double dans la base terrain
             </label>
-            <div className="grid grid-cols-2 gap-4">
-              {duplicate.records.map((record, idx) => (
-                <div 
-                  key={record.id}
-                  className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                    selectedRecord === record.id 
-                      ? 'border-blue-500 bg-blue-50' 
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                  onClick={() => setSelectedRecord(record.id)}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-mono font-medium">{record.code}</p>
-                      <p className="text-sm text-muted-foreground mt-1">{record.source}</p>
-                      <p className="text-sm mt-2">Date: {record.date}</p>
-                      <p className="text-sm">Valeur: {record.value}</p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {duplicate.records.map((record, idx) => {
+                const fields = getAllFields(record.equipmentData);
+                const isSelected = selectedRecordId === record.id;
+                
+                return (
+                  <div 
+                    key={record.id}
+                    className={`border rounded-lg overflow-hidden transition-all ${
+                      isSelected 
+                        ? 'border-green-500 ring-2 ring-green-200' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    {/* En-tête avec sélection */}
+                    <div 
+                      className={`p-4 cursor-pointer ${isSelected ? 'bg-green-50' : 'bg-gray-50'}`}
+                      onClick={() => setSelectedRecordId(record.id)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-mono font-semibold text-lg">{record.code}</p>
+                          </div>
+                          <p className="text-sm">
+                            <span className="font-medium">Date:</span> {record.date}
+                          </p>
+                          <p className="text-sm">
+                            <span className="font-medium">Localisation:</span> {record.localisation}
+                          </p>
+                        </div>
+                        <div className="w-8 h-8 rounded-full border flex items-center justify-center">
+                          {idx === 0 ? "1" : "2"}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center">
-                      {selectedRecord === record.id && (
-                        <CheckCircle className="h-5 w-5 text-green-500" />
+
+                    {/* Détails complets de l'équipement */}
+                    <div className="p-2 border-t">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-sm">
+                        {fields.map(([key, value]) => (
+                          <div key={key} className="border-b border-gray-100 py-1">
+                            <span className="text-muted-foreground text-xs block">
+                              {getFieldLabel(key)}
+                            </span>
+                            <span className="font-mono text-xs break-all">
+                              {formatValue(value)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      {fields.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          Aucun champ détaillé disponible
+                        </p>
                       )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
-          <div className="flex gap-2 pt-4 border-t">
+          {/* Actions */}
+          <div className="flex flex-wrap gap-3 pt-4 border-t">
             <button
               onClick={handleMerge}
-              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 flex items-center gap-2"
+              disabled={!selectedRecordId}
+              className={`px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium transition-colors ${
+                selectedRecordId
+                  ? "bg-green-600 text-white hover:bg-green-700"
+                  : "bg-gray-300 text-gray-500 cursor-not-allowed"
+              }`}
             >
               <GitMerge className="h-4 w-4" />
-              Fusionner
+              Fusionner (garder sélectionné)
+            </button>
+            <button
+              onClick={handleKeepBoth}
+              className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium"
+            >
+              <Copy className="h-4 w-4" />
+              Conserver les deux
             </button>
             <button
               onClick={() => onDiscard(duplicate)}
-              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center gap-2"
+              className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 font-medium"
             >
               <XCircle className="h-4 w-4" />
               Rejeter les deux
             </button>
           </div>
+          <p className="text-xs text-muted-foreground text-center">
+            La fusion supprimera l'enregistrement non sélectionné de la base de collecte terrain.
+            {!selectedRecordId && " Sélectionnez l'enregistrement à conserver pour activer la fusion."}
+          </p>
         </div>
       </div>
     </div>
@@ -429,12 +654,23 @@ export default function DuplicatesPage() {
   const [selectedDuplicate, setSelectedDuplicate] = useState<DuplicateRecord | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
-  // Generate duplicates for selected departure
+  // Récupérer les vrais doublons pour le départ sélectionné
   const duplicates = useMemo(() => {
-    if (selectedDeparture) {
-      return generateMockDuplicates(selectedDeparture.id, selectedDeparture.equipmentCount);
+    if (!selectedDeparture) return [];
+    
+    // Récupérer les anomalies de type "duplicate" pour ce départ
+    const anomalies = getAnomaliesByFeeder(selectedDeparture.feederId, "duplicate");
+    
+    // Convertir chaque anomalie en DuplicateRecord
+    const duplicateRecords: DuplicateRecord[] = [];
+    for (const anomaly of anomalies) {
+      const converted = convertAnomalyToDuplicate(anomaly);
+      if (converted) {
+        duplicateRecords.push(converted);
+      }
     }
-    return [];
+    
+    return duplicateRecords;
   }, [selectedDeparture]);
 
   // Filter duplicates
@@ -449,26 +685,24 @@ export default function DuplicatesPage() {
     );
   }, [duplicates, searchQuery]);
 
-  // Calculate global stats
+  // Calculer les stats globales
   const globalStats = useMemo(() => {
-    let total = 0;
-    let pending = 0;
-    let reviewing = 0;
-    let merged = 0;
-
+    let totalDuplicates = 0;
+    
     eneoRegions.forEach((region) => {
-      const stats = getRegionStats(region.id);
-      total += stats.total;
-      pending += stats.pending;
-      reviewing += stats.inProgress;
-      merged += stats.completed;
+      region.zones.forEach((zone) => {
+        zone.departures.forEach((departure) => {
+          const anomalies = getAnomaliesByFeeder(departure.feederId, "duplicate");
+          totalDuplicates += anomalies.length;
+        });
+      });
     });
 
     return {
-      total,
-      pendingAndInProgress: pending + reviewing,
-      completed: merged,
-      completionRate: total > 0 ? Math.round((merged / total) * 100) : 0,
+      total: totalDuplicates,
+      pendingAndInProgress: totalDuplicates,
+      completed: 0,
+      completionRate: 0,
     };
   }, []);
 
@@ -491,7 +725,6 @@ export default function DuplicatesPage() {
     return items;
   }, [selectedRegion, selectedZone, selectedDeparture]);
 
-  // Handle navigation
   const handleBreadcrumbNavigate = (item: BreadcrumbItem) => {
     if (item.type === "home") {
       setViewLevel("regions");
@@ -529,18 +762,20 @@ export default function DuplicatesPage() {
     setIsDetailModalOpen(true);
   };
 
-  const handleMergeDuplicate = (duplicate: DuplicateRecord) => {
-    toast.success(`Fusion des enregistrements pour ${duplicate.code}`);
-    setIsDetailModalOpen(false);
-  };
+const handleMergeDuplicate = (duplicate: DuplicateRecord, keepId: string) => {
+  const toDelete = duplicate.records.find(r => r.id !== keepId);
+
+  toast.success(`Fusion effectuée pour ${duplicate.code}`);
+  setIsDetailModalOpen(false);
+};
 
   const handleKeepDuplicate = (duplicate: DuplicateRecord) => {
-    toast.success(`Enregistrement conservé pour ${duplicate.code}`);
+    toast.success(`Les deux enregistrements sont conservés pour ${duplicate.code}`);
     setIsDetailModalOpen(false);
   };
 
   const handleDiscardDuplicate = (duplicate: DuplicateRecord) => {
-    toast.info(`Doublon ${duplicate.code} rejeté`);
+    toast.info(`Doublon ${duplicate.code} rejeté - les deux enregistrements seront supprimés`);
     setIsDetailModalOpen(false);
   };
 
@@ -566,7 +801,6 @@ export default function DuplicatesPage() {
     );
   }, [searchQuery]);
 
-  // Filter zones by search
   const filteredZones = useMemo(() => {
     if (!selectedRegion) return [];
     if (!searchQuery) return selectedRegion.zones;
@@ -576,7 +810,6 @@ export default function DuplicatesPage() {
     );
   }, [selectedRegion, searchQuery]);
 
-  // Filter departures by search
   const filteredDepartures = useMemo(() => {
     if (!selectedZone) return [];
     if (!searchQuery) return selectedZone.departures;
@@ -596,7 +829,7 @@ export default function DuplicatesPage() {
             Doublons
           </h1>
           <p className="text-muted-foreground mt-1">
-            Détection et gestion des enregistrements en double
+            Détection et gestion des enregistrements en double dans la base de collecte terrain
           </p>
         </div>
         <PeriodFilter value={period} onChange={setPeriod} />
@@ -634,7 +867,20 @@ export default function DuplicatesPage() {
           <h2 className="text-xl font-semibold mb-4">Découpage Eneo ({filteredRegions.length})</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredRegions.map((region) => {
-              const stats = getRegionStats(region.id);
+              let regionDuplicateCount = 0;
+
+                region.zones.forEach(zone => {
+                  zone.departures.forEach(departure => {
+                    regionDuplicateCount += getAnomaliesByFeeder(departure.feederId, "duplicate").length;
+                  });
+                });
+
+                const stats = {
+                  total: regionDuplicateCount,
+                  pending: regionDuplicateCount,
+                  inProgress: 0,
+                  completed: 0
+                };
               return (
                 <RegionCard
                   key={region.id}
@@ -648,11 +894,6 @@ export default function DuplicatesPage() {
               );
             })}
           </div>
-          {filteredRegions.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              Aucune region trouvée pour &quot;{searchQuery}&quot;
-            </div>
-          )}
         </div>
       )}
 
@@ -663,7 +904,19 @@ export default function DuplicatesPage() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredZones.map((zone) => {
-              const stats = getZoneStats(zone.id);
+              // Calculer le nombre total de doublons dans cette zone
+              let zoneDuplicateCount = 0;
+              zone.departures.forEach(departure => {
+                zoneDuplicateCount += getAnomaliesByFeeder(departure.feederId, "duplicate").length;
+              });
+              
+              const stats = {
+                total: zoneDuplicateCount,
+                pending: zoneDuplicateCount,
+                inProgress: 0,
+                completed: 0
+              };
+              
               return (
                 <ZoneCard
                   key={zone.id}
@@ -676,41 +929,30 @@ export default function DuplicatesPage() {
               );
             })}
           </div>
-          {filteredZones.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              Aucune zone trouvée pour &quot;{searchQuery}&quot;
-            </div>
-          )}
         </div>
       )}
 
       {viewLevel === "departures" && selectedZone && (
         <div>
           <h2 className="text-xl font-semibold mb-4">
-            Departs de {selectedZone.name} ({filteredDepartures.length})
+            Départs de {selectedZone.name} ({filteredDepartures.length})
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredDepartures.map((departure) => {
-              const completed = Math.floor(departure.equipmentCount * 0.6);
-              const pending = departure.equipmentCount - completed;
+              const duplicateCount = getAnomaliesByFeeder(departure.feederId, "duplicate").length;
               return (
                 <DepartureCard
                   key={departure.id}
                   code={departure.code}
                   name={departure.name}
-                  equipmentCount={departure.equipmentCount}
-                  completedCount={completed}
-                  pendingCount={pending}
+                  equipmentCount={duplicateCount}
+                  completedCount={0}
+                  pendingCount={duplicateCount}
                   onClick={() => handleDepartureClick(departure)}
                 />
               );
             })}
           </div>
-          {filteredDepartures.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              Aucun depart trouvé pour &quot;{searchQuery}&quot;
-            </div>
-          )}
         </div>
       )}
 
@@ -718,7 +960,7 @@ export default function DuplicatesPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">
-              Doublons du depart {selectedDeparture.code} ({filteredDuplicates.length})
+              Doublons du départ {selectedDeparture.code} ({filteredDuplicates.length})
             </h2>
           </div>
           
@@ -729,7 +971,7 @@ export default function DuplicatesPage() {
                 Liste des enregistrements en double
               </CardTitle>
               <CardDescription>
-                Gérez les doublons détectés pour le depart {selectedDeparture.name}
+                Gérez les doublons détectés dans la base de collecte terrain pour le départ {selectedDeparture.name}
               </CardDescription>
             </CardHeader>
             <CardContent>

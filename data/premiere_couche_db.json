@@ -307,7 +307,7 @@
         "created_date": "2024-08-27 11:07:57.000000"
       },
       {
-        "m_rid": 83107X3,
+        "m_rid": "83107X3",
         "name": "BONAMATOUMBE 2",
         "highest_voltage_level": 15,
         "second_substation_id": "1P05507",
@@ -451,7 +451,7 @@
         "created_date": "2024-08-27 11:07:57.000000"
       },
       {
-        "m_rid": 8310N03,
+        "m_rid": "8310N03",
         "name": "CARREFOUR MAGNE BONAMIKANO",
         "highest_voltage_level": 15,
         "second_substation_id": "",
@@ -523,7 +523,7 @@
         "created_date": "2024-08-27 11:07:57.000000"
       },
       {
-        "m_rid": 83110X1,
+        "m_rid": "83110X1",
         "name": "IMM. DINGANA",
         "highest_voltage_level": 15,
         "second_substation_id": "",
@@ -541,7 +541,7 @@
         "created_date": "2024-08-27 11:07:56.000000"
       },
       {
-        "m_rid": 83110X2,
+        "m_rid": "83110X2",
         "name": "DIKABO 1",
         "highest_voltage_level": 15,
         "second_substation_id": "1P05310",
@@ -703,7 +703,7 @@
         "created_date": "2024-08-27 11:07:57.000000"
       },
       {
-        "m_rid": 83114X1,
+        "m_rid": "83114X1",
         "name": "JIMO M.C. BONAMIKANO",
         "highest_voltage_level": 15,
         "second_substation_id": "",
@@ -865,7 +865,7 @@
         "created_date": "2024-08-27 11:07:56.000000"
       },
       {
-        "m_rid": 83116Z1,
+        "m_rid": "83116Z1",
         "name": "MOBIL BONASSAMA",
         "highest_voltage_level": 15,
         "second_substation_id": "",
@@ -883,7 +883,7 @@
         "created_date": "2024-08-27 11:07:56.000000"
       },
       {
-        "m_rid": 83116Z2,
+        "m_rid": "83116Z2",
         "name": "ECLAIRAGE PUBLIC",
         "highest_voltage_level": 15,
         "second_substation_id": "",
@@ -1277,7 +1277,7 @@
         "m_rid": "23ENEO5229",
         "name": "SYNDA",
         "apparent_power": 250,
-        "substation_id": 83107N6,
+        "substation_id": "83107N6",
         "t1": "1CN71577",
         "t2": "",
         "w1_voltage": 15,
@@ -1290,7 +1290,7 @@
         "m_rid": "23ENEO5214",
         "name": "IMMEUBLE KINGUE",
         "apparent_power": 160,
-        "substation_id": 83107X1,
+        "substation_id": "83107X1",
         "t1": "1CN71474",
         "t2": "",
         "w1_voltage": 15,
@@ -1303,7 +1303,7 @@
         "m_rid": "23ENEO5219",
         "name": "IMPOTS FEUHATO(TSOBNY)",
         "apparent_power": 160,
-        "substation_id": 83107X2,
+        "substation_id": "83107X2",
         "t1": "1CN71501",
         "t2": "",
         "w1_voltage": 15,
@@ -1316,7 +1316,7 @@
         "m_rid": "23ENEO5239",
         "name": "BONAMATOUMBE 2",
         "apparent_power": 160,
-        "substation_id": 83107X3,
+        "substation_id": "83107X3",
         "t1": "1CN71606",
         "t2": "",
         "w1_voltage": 15,
@@ -1420,7 +1420,7 @@
         "m_rid": "23ENEO5223",
         "name": "CARREFOUR MAGNE BONAMINKANO",
         "apparent_power": 160,
-        "substation_id": 8310N03,
+        "substation_id": "8310N03",
         "t1": "1CN71525",
         "t2": "",
         "w1_voltage": 15,
@@ -1472,7 +1472,7 @@
         "m_rid": "23ENEO5233",
         "name": "IMM. DINGANA",
         "apparent_power": 160,
-        "substation_id": 83110X1,
+        "substation_id": "83110X1",
         "t1": "1CN71623",
         "t2": "",
         "w1_voltage": 15,
@@ -1485,7 +1485,7 @@
         "m_rid": "23ENEO9713",
         "name": "DIKABO 1",
         "apparent_power": 160,
-        "substation_id": 83110X2,
+        "substation_id": "83110X2",
         "t1": "1CN71541",
         "t2": "",
         "w1_voltage": 15,
@@ -1628,7 +1628,7 @@
         "m_rid": "23ENEO5208",
         "name": "JIMO M.C BONAMINKANO",
         "apparent_power": 160,
-        "substation_id": 83114X1,
+        "substation_id": "83114X1",
         "t1": "1CN71339",
         "t2": "",
         "w1_voltage": 15,
@@ -1745,7 +1745,7 @@
         "m_rid": "23ENEO5203",
         "name": "MOBIL BONASSAMA",
         "apparent_power": 400,
-        "substation_id": 83116Z1,
+        "substation_id": "83116Z1",
         "t1": "1CN71332",
         "t2": "",
         "w1_voltage": 15,
@@ -1758,7 +1758,7 @@
         "m_rid": "23ENEO5204",
         "name": "ECLAIRAGE PUBLIC",
         "apparent_power": 160,
-        "substation_id": 83116Z2,
+        "substation_id": "83116Z2",
         "t1": "1CN71448",
         "t2": "",
         "w1_voltage": 15,
@@ -2070,7 +2070,7 @@
       },
       {
         "m_rid": "83107N6_JDB01",
-        "substation_id": 83107N6,
+        "substation_id": "83107N6",
         "name": "JDBSYNDA_01",
         "voltage": 15,
         "phase": "ABC",
@@ -2252,7 +2252,7 @@
       },
       {
         "m_rid": "83116Z1_JDB01",
-        "substation_id": 83116Z1,
+        "substation_id": "83116Z1",
         "name": "JDBMOBIL BONASSAMA_01",
         "voltage": 15,
         "phase": "ABC",
@@ -2562,7 +2562,7 @@
         "voltage": 15,
         "busbar_id1": "83107N6_JDB01",
         "busbar_id2": "",
-        "substation_id": 83107N6,
+        "substation_id": "83107N6",
         "created_date": "2024-08-27 11:07:17.000000",
         "active": true,
         "display_scada": true
@@ -2574,7 +2574,7 @@
         "voltage": 15,
         "busbar_id1": "83107N6_JDB01",
         "busbar_id2": "",
-        "substation_id": 83107N6,
+        "substation_id": "83107N6",
         "created_date": "2024-08-27 11:07:17.000000",
         "active": true,
         "display_scada": true
@@ -2586,7 +2586,7 @@
         "voltage": 15,
         "busbar_id1": "83107N6_JDB01",
         "busbar_id2": "",
-        "substation_id": 83107N6,
+        "substation_id": "83107N6",
         "created_date": "2024-08-27 11:07:18.000000",
         "active": true,
         "display_scada": true
@@ -3042,7 +3042,7 @@
         "voltage": 15,
         "busbar_id1": "83116Z1_JDB01",
         "busbar_id2": "",
-        "substation_id": 83116Z1,
+        "substation_id": "83116Z1",
         "created_date": "2024-08-27 11:07:17.000000",
         "active": true,
         "display_scada": true
@@ -3054,7 +3054,7 @@
         "voltage": 15,
         "busbar_id1": "83116Z1_JDB01",
         "busbar_id2": "",
-        "substation_id": 83116Z1,
+        "substation_id": "83116Z1",
         "created_date": "2024-08-27 11:07:17.000000",
         "active": true,
         "display_scada": true
@@ -3066,7 +3066,7 @@
         "voltage": 15,
         "busbar_id1": "83116Z1_JDB01",
         "busbar_id2": "",
-        "substation_id": 83116Z1,
+        "substation_id": "83116Z1",
         "created_date": "2024-08-27 11:07:17.000000",
         "active": true,
         "display_scada": true

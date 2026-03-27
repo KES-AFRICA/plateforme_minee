@@ -14,9 +14,9 @@ import { NavigationBreadcrumb, BreadcrumbItem } from "@/components/complex-cases
 import { EquipmentTable, Equipment } from "@/components/complex-cases/equipment-table";
 import { EquipmentDetailModal } from "@/components/complex-cases/equipment-detail-modal";
 import { AddCommentModal } from "@/components/complex-cases/add-comment-modal";
-import { eneoRegions, getRegionStats, getZoneStats, EneoRegion, EneoZone, EneoDeparture } from "@/lib/api/eneo-data";
 import { AlertCircle, AlertTriangle, Search } from "lucide-react";
 import { toast } from "sonner";
+import {  eneoRegions, getRegionStats, getZoneStats, EneoRegion, EneoZone, EneoDeparture } from "@/lib/api/eneo-data";
 
 type ViewLevel = "regions" | "zones" | "departures" | "equipments";
 

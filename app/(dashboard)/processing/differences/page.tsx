@@ -10,9 +10,9 @@ import { DepartureCard } from "@/components/complex-cases/departure-card";
 import { PeriodFilter, PeriodType } from "@/components/complex-cases/period-filter";
 import { GlobalStatsCards } from "@/components/complex-cases/global-stats-cards";
 import { NavigationBreadcrumb, BreadcrumbItem } from "@/components/complex-cases/navigation-breadcrumb";
-import { eneoRegions, getRegionStats, getZoneStats, EneoRegion, EneoZone, EneoDeparture } from "@/lib/api/eneo-data";
 import { GitCompare, Search } from "lucide-react";
 import { toast } from "sonner";
+import { eneoRegions, getRegionStats, getZoneStats, EneoRegion, EneoZone, EneoDeparture  } from "@/lib/api/eneo-data";
 
 // Types pour les divergences
 type DivergenceSeverity = "critical" | "high" | "medium" | "low";
