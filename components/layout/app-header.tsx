@@ -19,14 +19,35 @@ import { usePathname } from "next/navigation";
 const pathTitles: Record<string, { key: string; parent?: string }> = {
   "/dashboard": { key: "nav.dashboard" },
   "/processing": { key: "nav.processing" },
-  "/processing/duplicates": { key: "nav.duplicates", parent: "/processing" },
+
+  //Distribution
+  "distribution/processing/duplicates": { key: "nav.duplicates", parent: "/processing" },
   "/processing/differences": { key: "nav.differences", parent: "/processing" },
   "/processing/new-kobo": { key: "nav.newKobo", parent: "/processing" },
   "/processing/missing-eneo": { key: "nav.missingEneo", parent: "/processing" },
   "/processing/complex": { key: "nav.complexCases", parent: "/processing" },
   "/validation": { key: "nav.validation" },
-  "/users": { key: "nav.users" },
   "/notifications": { key: "nav.notifications" },
+
+  // //Commercialisation
+  // "/processing/duplicates": { key: "nav.duplicates", parent: "/processing" },
+  // "/processing/differences": { key: "nav.differences", parent: "/processing" },
+  // "/processing/new-kobo": { key: "nav.newKobo", parent: "/processing" },
+  // "/processing/missing-eneo": { key: "nav.missingEneo", parent: "/processing" },
+  // "/processing/complex": { key: "nav.complexCases", parent: "/processing" },
+  // "/validation": { key: "nav.validation" },
+  // "/notifications": { key: "nav.notifications" },
+
+  // //Genie Logiciel
+  // "/processing/duplicates": { key: "nav.duplicates", parent: "/processing" },
+  // "/processing/differences": { key: "nav.differences", parent: "/processing" },
+  // "/processing/new-kobo": { key: "nav.newKobo", parent: "/processing" },
+  // "/processing/missing-eneo": { key: "nav.missingEneo", parent: "/processing" },
+  // "/processing/complex": { key: "nav.complexCases", parent: "/processing" },
+  // "/validation": { key: "nav.validation" },
+  // "/notifications": { key: "nav.notifications" },
+
+  "/users": { key: "nav.users" },
   "/map": { key: "nav.map" },
   "/performance": { key: "nav.performance" },
   "/settings": { key: "nav.settings" },

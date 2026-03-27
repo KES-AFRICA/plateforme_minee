@@ -10,7 +10,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -19,6 +18,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -50,6 +50,46 @@ import {
   AlertCircle,
   Bell,
 } from "lucide-react";
+import { LucideIcon } from "lucide-react";
+
+// Définition des types
+type SubSubMenuItem = {
+  title: string;
+  url: string;
+  icon: LucideIcon;
+};
+
+type SubMenuItem = {
+  title: string;
+  icon: LucideIcon;
+  url?: string;
+  permission?: string;
+  items?: SubSubMenuItem[];
+};
+
+type SectionDropdownItem = {
+  title: string;
+  icon: LucideIcon;
+  type: "section-dropdown";
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  items: SubMenuItem[];
+};
+
+type SimpleMenuItem = {
+  title: string;
+  url: string;
+  icon: LucideIcon;
+  permission?: string;
+  type?: never;
+  color?: never;
+  bgColor?: never;
+  borderColor?: never;
+  items?: never;
+};
+
+type NavItem = SimpleMenuItem | SectionDropdownItem;
 
 const roleLabels: Record<string, string> = {
   admin: "Administrateur",
@@ -62,8 +102,10 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { user, logout, hasPermission } = useAuth();
   const { t } = useI18n();
+  const { state } = useSidebar();
+  const isCollapsed = state === "collapsed";
 
-  const mainNavItems = [
+  const mainNavItems: NavItem[] = [
     {
       title: t("nav.dashboard"),
       url: "/dashboard",
@@ -71,54 +113,169 @@ export function AppSidebar() {
       permission: "view:dashboard",
     },
     {
-      title: t("nav.processing"),
-      icon: Database,
-      permission: "view:processing",
+      title: "Distribution",
+      icon: Droplets,
+      type: "section-dropdown",
+      color: "text-blue-500",
+      bgColor: "bg-blue-500/10",
+      borderColor: "border-l-blue-500",
       items: [
         {
-          title: t("nav.duplicates"),
-          url: "/processing/duplicates",
-          icon: Copy,
+          title: t("nav.processing"),
+          icon: Database,
+          permission: "view:processing",
+          items: [
+            {
+              title: t("nav.duplicates"),
+              url: "/processing/duplicates",
+              icon: Copy,
+            },
+            {
+              title: t("nav.differences"),
+              url: "/processing/differences",
+              icon: GitCompare,
+            },
+            {
+              title: t("nav.newKobo"),
+              url: "/processing/new-kobo",
+              icon: FilePlus,
+            },
+            {
+              title: t("nav.missingEneo"),
+              url: "/processing/missing-eneo",
+              icon: FileX,
+            },
+            {
+              title: t("nav.complexCases"),
+              url: "/processing/complex",
+              icon: AlertCircle,
+            },
+          ],
         },
         {
-          title: t("nav.differences"),
-          url: "/processing/differences",
-          icon: GitCompare,
+          title: t("nav.validation"),
+          url: "/validation",
+          icon: CheckSquare,
+          permission: "view:validation",
         },
         {
-          title: t("nav.newKobo"),
-          url: "/processing/new-kobo",
-          icon: FilePlus,
-        },
-        {
-          title: t("nav.missingEneo"),
-          url: "/processing/missing-eneo",
-          icon: FileX,
-        },
-        {
-          title: t("nav.complexCases"),
-          url: "/processing/complex",
-          icon: AlertCircle,
+          title: t("nav.notifications"),
+          url: "/notifications",
+          icon: Bell,
         },
       ],
     },
     {
-      title: t("nav.validation"),
-      url: "/validation",
-      icon: CheckSquare,
-      permission: "view:validation",
+      title: "Commercial",
+      icon: Zap,
+      type: "section-dropdown",
+      color: "text-emerald-500",
+      bgColor: "bg-emerald-500/10",
+      borderColor: "border-l-emerald-500",
+      items: [
+        {
+          title: t("nav.processing"),
+          icon: Database,
+          permission: "view:processing",
+          items: [
+            {
+              title: t("nav.duplicates"),
+              url: "/processing/duplicates",
+              icon: Copy,
+            },
+            {
+              title: t("nav.differences"),
+              url: "/processing/differences",
+              icon: GitCompare,
+            },
+            {
+              title: t("nav.newKobo"),
+              url: "/processing/new-kobo",
+              icon: FilePlus,
+            },
+            {
+              title: t("nav.missingEneo"),
+              url: "/processing/missing-eneo",
+              icon: FileX,
+            },
+            {
+              title: t("nav.complexCases"),
+              url: "/processing/complex",
+              icon: AlertCircle,
+            },
+          ],
+        },
+        {
+          title: t("nav.validation"),
+          url: "/validation",
+          icon: CheckSquare,
+          permission: "view:validation",
+        },
+        {
+          title: t("nav.notifications"),
+          url: "/notifications",
+          icon: Bell,
+        },
+      ],
+    },
+    {
+      title: "Génie civil",
+      icon: BarChart3,
+      type: "section-dropdown",
+      color: "text-amber-500",
+      bgColor: "bg-amber-500/10",
+      borderColor: "border-l-amber-500",
+      items: [
+        {
+          title: t("nav.processing"),
+          icon: Database,
+          permission: "view:processing",
+          items: [
+            {
+              title: t("nav.duplicates"),
+              url: "/processing/duplicates",
+              icon: Copy,
+            },
+            {
+              title: t("nav.differences"),
+              url: "/processing/differences",
+              icon: GitCompare,
+            },
+            {
+              title: t("nav.newKobo"),
+              url: "/processing/new-kobo",
+              icon: FilePlus,
+            },
+            {
+              title: t("nav.missingEneo"),
+              url: "/processing/missing-eneo",
+              icon: FileX,
+            },
+            {
+              title: t("nav.complexCases"),
+              url: "/processing/complex",
+              icon: AlertCircle,
+            },
+          ],
+        },
+        {
+          title: t("nav.validation"),
+          url: "/validation",
+          icon: CheckSquare,
+          permission: "view:validation",
+        },
+        {
+          title: t("nav.notifications"),
+          url: "/notifications",
+          icon: Bell,
+        },
+      ],
     },
     {
       title: t("nav.users"),
       url: "/users",
       icon: Users,
       permission: "view:users",
-    },
-    {
-      title: t("nav.notifications"),
-      url: "/notifications",
-      icon: Bell,
-      //permission: "view:notifications",
     },
     {
       title: t("nav.map"),
@@ -128,12 +285,47 @@ export function AppSidebar() {
     },
   ];
 
-  const filteredNavItems = mainNavItems.filter(
-    (item) => !item.permission || hasPermission(item.permission)
-  );
+  const filteredNavItems = mainNavItems
+    .map((item): NavItem | null => {
+      if (item.type === "section-dropdown") {
+        const filteredItems = item.items
+          .map((subItem): SubMenuItem | null => {
+            if (subItem.items) {
+              const filteredSubItems = subItem.items.filter(
+                (subSubItem) => !subItem.permission || hasPermission(subItem.permission)
+              );
+              if (filteredSubItems.length === 0) return null;
+              return {
+                ...subItem,
+                items: filteredSubItems,
+              };
+            }
+            if (!subItem.permission || hasPermission(subItem.permission)) {
+              return subItem;
+            }
+            return null;
+          })
+          .filter((subItem): subItem is SubMenuItem => subItem !== null);
+
+        if (filteredItems.length === 0) return null;
+        return {
+          ...item,
+          items: filteredItems,
+        };
+      }
+      if (!item.permission || hasPermission(item.permission)) {
+        return item;
+      }
+      return null;
+    })
+    .filter((item): item is NavItem => item !== null);
 
   const getInitials = (firstName?: string, lastName?: string) => {
     return `${firstName?.charAt(0) || ""}${lastName?.charAt(0) || ""}`.toUpperCase();
+  };
+
+  const isSectionDropdown = (item: NavItem): item is SectionDropdownItem => {
+    return item.type === "section-dropdown";
   };
 
   return (
@@ -141,72 +333,135 @@ export function AppSidebar() {
       {/* Header */}
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
             <span className="font-bold text-sidebar-foreground">TADEC</span>
-            {/* <span className="text-xs text-sidebar-foreground/60">Traitement & Distribution</span> */}
           </div>
         </div>
       </SidebarHeader>
 
       <SidebarSeparator />
 
-      {/* Main Navigation */}
-      <SidebarContent className="dark-scrollbar">
+      {/* Main Navigation - avec hauteur et défilement optimisés */}
+      <SidebarContent className="overflow-y-auto flex-1 min-h-0">
         <SidebarGroup>
-          {/* <SidebarGroupLabel>{t("nav.dashboard")}</SidebarGroupLabel> */}
           <SidebarGroupContent>
-            <SidebarMenu>
-              {filteredNavItems.map((item) =>
-                item.items ? (
-                  <Collapsible
-                    key={item.title}
-                    asChild
-                    defaultOpen={item.items.some((sub) => pathname.startsWith(sub.url))}
-                    className="group/collapsible"
-                  >
-                    <SidebarMenuItem>
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton tooltip={item.title}>
-                          <item.icon className="w-4 h-4" />
-                          <span>{item.title}</span>
-                          <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                        </SidebarMenuButton>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          {item.items.map((subItem) => (
-                            <SidebarMenuSubItem key={subItem.url}>
-                              <SidebarMenuSubButton
-                                asChild
-                                isActive={pathname === subItem.url}
-                              >
-                                <Link href={subItem.url}>
-                                  <subItem.icon className="w-4 h-4" />
-                                  <span>{subItem.title}</span>
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ))}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    </SidebarMenuItem>
-                  </Collapsible>
-                ) : (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
+            <SidebarMenu className="pb-4">
+              {filteredNavItems.map((item) => {
+                // Gestion des sections dropdown (Distribution, Commercial, Génie civil)
+                if (isSectionDropdown(item)) {
+                  // Déterminer si la section doit être ouverte par défaut
+                  const shouldBeOpen = item.items.some((subItem) => {
+                    if (subItem.items) {
+                      return subItem.items.some((subSubItem) => pathname.startsWith(subSubItem.url));
+                    }
+                    return subItem.url ? pathname.startsWith(subItem.url) : false;
+                  });
+
+                  return (
+                    <Collapsible
+                      key={item.title}
                       asChild
-                      isActive={pathname === item.url}
-                      tooltip={item.title}
+                      defaultOpen={false}
+                      className="group/collapsible mb-2"
                     >
-                      <Link href={item.url!}>
-                        <item.icon className="w-4 h-4" />
-                        <span>{item.title}</span>
+                      <SidebarMenuItem>
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton
+                            tooltip={item.title}
+                            className={`transition-all duration-200 ${item.bgColor} hover:${item.bgColor}`}
+                          >
+                            <item.icon className={`w-4 h-4 shrink-0 ${item.color}`} />
+                            <span className="font-medium truncate flex-1 text-left">{item.title}</span>
+                            <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <SidebarMenuSub className="ml-2 border-l border-sidebar-border pl-2 space-y-1">
+                            {item.items.map((subItem) => {
+                              if (subItem.items) {
+                                return (
+                                  <Collapsible
+                                    key={subItem.title}
+                                    asChild
+                                    defaultOpen={subItem.items.some((sub) => pathname.startsWith(sub.url))}
+                                    className="group/sub-collapsible"
+                                  >
+                                    <SidebarMenuSubItem>
+                                      <CollapsibleTrigger asChild>
+                                        <SidebarMenuSubButton
+                                          className="w-full justify-between hover:bg-sidebar-accent/50 px-2 py-1.5"
+                                        >
+                                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                                            <subItem.icon className="w-4 h-4 shrink-0" />
+                                            <span className="truncate">{subItem.title}</span>
+                                          </div>
+                                          <ChevronRight className="h-3 w-3 shrink-0 transition-transform duration-200 group-data-[state=open]/sub-collapsible:rotate-90" />
+                                        </SidebarMenuSubButton>
+                                      </CollapsibleTrigger>
+                                      <CollapsibleContent>
+                                        <SidebarMenuSub className="ml-4 space-y-1">
+                                          {subItem.items.map((subSubItem) => (
+                                            <SidebarMenuSubItem key={subSubItem.url}>
+                                              <SidebarMenuSubButton
+                                                asChild
+                                                isActive={pathname === subSubItem.url}
+                                                className={`transition-colors px-2 py-1.5 ${
+                                                  pathname === subSubItem.url
+                                                    ? `${item.bgColor} ${item.borderColor} border-l-2`
+                                                    : ""
+                                                }`}
+                                              >
+                                                <Link href={subSubItem.url} className="min-w-0">
+                                                  <subSubItem.icon className="w-4 h-4 shrink-0" />
+                                                  <span className="truncate">{subSubItem.title}</span>
+                                                </Link>
+                                              </SidebarMenuSubButton>
+                                            </SidebarMenuSubItem>
+                                          ))}
+                                        </SidebarMenuSub>
+                                      </CollapsibleContent>
+                                    </SidebarMenuSubItem>
+                                  </Collapsible>
+                                );
+                              }
+                              return (
+                                <SidebarMenuSubItem key={subItem.url}>
+                                  <SidebarMenuSubButton
+                                    asChild
+                                    isActive={pathname === subItem.url}
+                                    className={`transition-colors px-2 py-1.5 ${
+                                      pathname === subItem.url
+                                        ? `${item.bgColor} ${item.borderColor} border-l-2`
+                                        : ""
+                                    }`}
+                                  >
+                                    <Link href={subItem.url!} className="min-w-0">
+                                      <subItem.icon className="w-4 h-4 shrink-0" />
+                                      <span className="truncate">{subItem.title}</span>
+                                    </Link>
+                                  </SidebarMenuSubButton>
+                                </SidebarMenuSubItem>
+                              );
+                            })}
+                          </SidebarMenuSub>
+                        </CollapsibleContent>
+                      </SidebarMenuItem>
+                    </Collapsible>
+                  );
+                }
+
+                // Gestion des éléments simples (Dashboard, Users, Map)
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={pathname === item.url} tooltip={item.title}>
+                      <Link href={item.url}>
+                        <item.icon className="w-4 h-4 shrink-0" />
+                        <span className="truncate">{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                )
-              )}
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -215,7 +470,7 @@ export function AppSidebar() {
       <SidebarSeparator />
 
       {/* Footer - User Menu */}
-      <SidebarFooter className="p-2">
+      <SidebarFooter className="p-2 shrink-0">
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
@@ -225,27 +480,22 @@ export function AppSidebar() {
                   className="w-full"
                   tooltip={user?.firstName || "User"}
                 >
-                  <Avatar className="h-8 w-8 rounded-lg">
+                  <Avatar className="h-8 w-8 rounded-lg shrink-0">
                     <AvatarFallback className="rounded-lg bg-sidebar-primary/20 text-sidebar-primary text-xs">
                       {getInitials(user?.firstName, user?.lastName)}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex flex-col items-start text-left">
-                    <span className="text-sm font-medium truncate max-w-30">
+                  <div className="flex flex-col items-start text-left min-w-0 flex-1">
+                    <span className="text-sm font-medium truncate w-full">
                       {user?.firstName} {user?.lastName}
                     </span>
-                    <span className="text-xs text-sidebar-foreground/60 truncate max-w-30">
+                    <span className="text-xs text-sidebar-foreground/60 truncate w-full">
                       {user?.role && roleLabels[user.role]}
                     </span>
                   </div>
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
-              <DropdownMenuContent
-                className="w-56"
-                align="end"
-                side="right"
-                sideOffset={8}
-              >
+              <DropdownMenuContent className="w-56" align="end" side="right" sideOffset={8}>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium">

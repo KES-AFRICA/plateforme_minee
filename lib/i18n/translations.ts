@@ -68,6 +68,9 @@ export const translations = {
       missingEneo: "Manquants",
       complexCases: "Cas Complexes",
       notifications: "Notifications",
+      distribution: "Distribution",
+      commercial: "Commercial",
+      genieCivil: "Genie civil",
     },
 
     // Complex Cases
@@ -319,7 +322,10 @@ export const translations = {
     newKobo: "New",
     missingEneo: "Missing",
     complexCases: "Complex Cases",
-    notifications: "Notifications"
+    notifications: "Notifications",
+    distribution: "Distribution",
+    commercial: "Commercial",
+    genieCivil: "Civil engeneering",
   },
 
     // Complex Cases
