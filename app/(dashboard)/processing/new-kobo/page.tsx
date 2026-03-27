@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useI18n } from "@/lib/i18n/context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,175 +10,174 @@ import { DepartureCard } from "@/components/complex-cases/departure-card";
 import { PeriodFilter, PeriodType } from "@/components/complex-cases/period-filter";
 import { GlobalStatsCards } from "@/components/complex-cases/global-stats-cards";
 import { NavigationBreadcrumb, BreadcrumbItem } from "@/components/complex-cases/navigation-breadcrumb";
-//import { eneoRegions, getRegionStats, getZoneStats, EneoRegion, EneoZone, EneoDeparture } from "@/lib/api/eneo-data";
-import { Search, FilePlus, CheckCircle, XCircle, Eye, Upload, FileText } from "lucide-react";
+import { Search, FilePlus, CheckCircle, XCircle, Eye, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
-import { eneoRegions, getRegionStats, getZoneStats, EneoRegion, EneoZone, EneoDeparture  } from "@/lib/api/eneo-data";
+import { 
+  eneoRegions, 
+  getAnomaliesByFeeder, 
+  getComparisonStats,
+  EneoRegion, 
+  EneoZone, 
+  EneoDeparture,
+  AnomalyCase
+} from "@/lib/api/eneo-data";
 
 type ViewLevel = "regions" | "zones" | "departures" | "newData";
 
-// Types pour les nouvelles données Kobo
-type DataType = "customer" | "meter" | "reading" | "complaint" | "survey" | "installation";
-type ValidationStatus = "pending" | "reviewing" | "validated" | "rejected" | "duplicate";
-type DataSource = "kobo" | "mobile_app" | "web_form" | "api_import";
-
+// Type pour les nouvelles données basé sur les anomalies réelles
 interface NewDataRecord {
   id: string;
   code: string;
-  type: DataType;
+  type: string;
+  table: string;
   title: string;
   description: string;
-  source: DataSource;
   submissionDate: string;
-  submittedBy: string;
-  validationStatus: ValidationStatus;
-  priority: "high" | "medium" | "low";
-  assignedTo?: string;
+  validationStatus: "pending" | "reviewing" | "validated" | "rejected";
+  rawAnomaly: AnomalyCase;
   metadata: {
     latitude?: number;
     longitude?: number;
-    photos?: number;
-    attachments?: string[];
+    [key: string]: unknown;
   };
 }
 
-// Générer des nouvelles données mock
-function generateMockNewData(departureId: string, count: number): NewDataRecord[] {
-  const types: DataType[] = ["customer", "meter", "reading", "complaint", "survey", "installation"];
-  const typeLabels = {
-    customer: "Nouveau client",
-    meter: "Installation compteur",
-    reading: "Relevé terrain",
-    complaint: "Réclamation client",
-    survey: "Enquête satisfaction",
-    installation: "Demande d'installation"
+// Obtenir le libellé du type d'équipement
+function getEquipmentTypeLabel(table: string): string {
+  const labels: Record<string, string> = {
+    substation: "Poste source",
+    powertransformer: "Transformateur",
+    busbar: "Jeu de barres",
+    bay: "Départ",
+    switch: "Disjoncteur",
+    wire: "Ligne",
+    pole: "Poteau",
+    node: "Nœud réseau",
+    feeder: "Départ",
+  };
+  return labels[table] || table;
+}
+
+// Formater une valeur pour l'affichage
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") return value ? "Oui" : "Non";
+  if (value instanceof Date) return value.toLocaleString();
+  if (typeof value === "object") return JSON.stringify(value).substring(0, 100);
+  return String(value);
+}
+
+// Obtenir un titre lisible pour l'enregistrement
+function getRecordTitle(record: Record<string, unknown>, table: string): string {
+  if (record.name) return String(record.name);
+  if (record.code) return String(record.code);
+  if (record.local_name) return String(record.local_name);
+  return `${getEquipmentTypeLabel(table)} ${record.m_rid}`;
+}
+
+// Obtenir une description des champs importants
+function getRecordDescription(record: Record<string, unknown>, table: string): string {
+  const importantFields: Record<string, string[]> = {
+    substation: ["type", "regime", "localisation"],
+    powertransformer: ["apparent_power", "w1_voltage", "w2_voltage"],
+    busbar: ["voltage", "phase"],
+    bay: ["type", "voltage"],
+    switch: ["nature", "type", "normal_open"],
+    wire: ["nature_conducteur", "section", "phase"],
+    pole: ["height", "type"],
+    node: ["code"],
   };
   
-  const titles = [
-    "Demande de nouveau raccordement",
-    "Signalement compteur défectueux",
-    "Relevé consommation mensuel",
-    "Plainte sur facturation excessive",
-    "Enquête de satisfaction client",
-    "Installation compteur intelligent",
-    "Mise à jour coordonnées client",
-    "Demande de changement de puissance"
-  ];
+  const fields = importantFields[table] || ["name", "code"];
+  const descriptions = fields
+    .filter(f => record[f] !== undefined && record[f] !== null && record[f] !== "")
+    .map(f => `${f}: ${formatValue(record[f])}`);
   
-  const descriptions = [
-    "Nouveau client en zone résidentielle nécessitant un raccordement électrique",
-    "Compteur affichant des valeurs anormales depuis 3 mois",
-    "Données de consommation collectées lors de la tournée terrain",
-    "Client mécontent des montants facturés depuis janvier",
-    "Questionnaire de satisfaction post-intervention technique",
-    "Installation de compteur communicant dans quartier nord",
-    "Changement d'adresse et de contact du client principal",
-    "Augmentation de puissance demandée pour activité commerciale"
-  ];
+  if (descriptions.length === 0) return "Nouvel équipement détecté";
+  return descriptions.join(" • ");
+}
+
+// Convertir une anomalie de type "new" en NewDataRecord
+function convertAnomalyToNewData(anomaly: AnomalyCase): NewDataRecord | null {
+  if (anomaly.type !== "new" || !anomaly.layer2Record) return null;
   
-  const sources: DataSource[] = ["kobo", "mobile_app", "web_form", "api_import"];
-  const statuses: ValidationStatus[] = ["pending", "reviewing", "validated", "rejected", "duplicate"];
-  const priorities: ("high" | "medium" | "low")[] = ["high", "medium", "low"];
-  const users = ["Jean Dupont", "Marie Kouam", "Paul Ndi", "Claire Biya", undefined];
-  const submitterNames = ["Agent Terrain", "Client", "Technicien ENEO", "Superviseur", "Chef d'agence"];
-
-  const newData: NewDataRecord[] = [];
-
-  for (let i = 0; i < count; i++) {
-    const submissionDate = new Date(Date.now() - Math.floor(Math.random() * 14 * 24 * 60 * 60 * 1000));
-    
-    newData.push({
-      id: `${departureId}-new-${i + 1}`,
-      code: `NEW-${departureId.toUpperCase()}-${String(i + 1).padStart(3, "0")}`,
-      type: types[Math.floor(Math.random() * types.length)],
-      title: titles[Math.floor(Math.random() * titles.length)],
-      description: descriptions[Math.floor(Math.random() * descriptions.length)],
-      source: sources[Math.floor(Math.random() * sources.length)],
-      submissionDate: submissionDate.toLocaleDateString("fr-FR"),
-      submittedBy: submitterNames[Math.floor(Math.random() * submitterNames.length)],
-      validationStatus: statuses[Math.floor(Math.random() * statuses.length)],
-      priority: priorities[Math.floor(Math.random() * priorities.length)],
-      assignedTo: users[Math.floor(Math.random() * users.length)],
-      metadata: {
-        latitude: Math.random() > 0.7 ? 3.8480 + (Math.random() - 0.5) * 0.1 : undefined,
-        longitude: Math.random() > 0.7 ? 11.5020 + (Math.random() - 0.5) * 0.1 : undefined,
-        photos: Math.floor(Math.random() * 5),
-        attachments: Math.random() > 0.5 ? ["photo1.jpg", "document.pdf"] : undefined,
-      },
-    });
-  }
-
-  return newData;
+  const record = anomaly.layer2Record;
+  const table = anomaly.table;
+  const title = getRecordTitle(record, table);
+  const description = getRecordDescription(record, table);
+  
+  // Extraire les métadonnées (latitude, longitude si disponibles)
+  const metadata: Record<string, unknown> = {};
+  if (record.latitude) metadata.latitude = Number(record.latitude);
+  if (record.longitude) metadata.longitude = Number(record.longitude);
+  if (record.lattitude) metadata.latitude = Number(record.lattitude);
+  
+  // Ajouter les champs importants comme métadonnées
+  const importantFields = ["voltage", "apparent_power", "type", "regime", "section"];
+  importantFields.forEach(field => {
+    if (record[field] !== undefined && record[field] !== null && record[field] !== "") {
+      metadata[field] = record[field];
+    }
+  });
+  
+  return {
+    id: anomaly.id,
+    code: `${table.toUpperCase()}-${record.m_rid || record.code || "NEW"}`,
+    type: getEquipmentTypeLabel(table),
+    table: table,
+    title: title,
+    description: description,
+    submissionDate: (record.created_date as string)?.split('T')[0] || new Date().toISOString().split('T')[0],
+    validationStatus: "pending",
+    rawAnomaly: anomaly,
+    metadata: metadata,
+  };
 }
 
 // Composant pour afficher les nouvelles données
 function NewDataTable({ 
   records, 
   onView, 
-  onValidate, 
-  onReject, 
+  onKeep, 
+  onDelete, 
   onReview,
-  onAssign,
   onBulkAction 
 }: { 
   records: NewDataRecord[];
   onView: (record: NewDataRecord) => void;
-  onValidate: (record: NewDataRecord) => void;
-  onReject: (record: NewDataRecord) => void;
+  onKeep: (record: NewDataRecord) => void;
+  onDelete: (record: NewDataRecord) => void;
   onReview: (record: NewDataRecord) => void;
-  onAssign: (record: NewDataRecord) => void;
   onBulkAction: (ids: string[], action: string) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const getStatusColor = (status: ValidationStatus) => {
+  const getStatusColor = (status: NewDataRecord["validationStatus"]) => {
     switch (status) {
       case "pending": return "text-yellow-600 bg-yellow-100";
       case "reviewing": return "text-blue-600 bg-blue-100";
       case "validated": return "text-green-600 bg-green-100";
       case "rejected": return "text-red-600 bg-red-100";
-      case "duplicate": return "text-gray-600 bg-gray-100";
       default: return "text-gray-600 bg-gray-100";
     }
   };
 
-  const getStatusLabel = (status: ValidationStatus) => {
+  const getStatusLabel = (status: NewDataRecord["validationStatus"]) => {
     switch (status) {
       case "pending": return "En attente";
       case "reviewing": return "En revue";
-      case "validated": return "Validé";
+      case "validated": return "Intégré";
       case "rejected": return "Rejeté";
-      case "duplicate": return "Doublon";
       default: return status;
     }
-  };
-
-  const getPriorityColor = (priority: "high" | "medium" | "low") => {
-    switch (priority) {
-      case "high": return "text-red-600 bg-red-100";
-      case "medium": return "text-orange-600 bg-orange-100";
-      case "low": return "text-blue-600 bg-blue-100";
-      default: return "text-gray-600 bg-gray-100";
-    }
-  };
-
-  const getTypeLabel = (type: DataType) => {
-    const labels = {
-      customer: "Nouveau client",
-      meter: "Installation compteur",
-      reading: "Relevé terrain",
-      complaint: "Réclamation",
-      survey: "Enquête",
-      installation: "Demande installation"
-    };
-    return labels[type];
   };
 
   const filteredRecords = records.filter(record => 
     record.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
     record.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    getTypeLabel(record.type).toLowerCase().includes(searchTerm.toLowerCase())
+    record.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    record.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleSelectAll = () => {
@@ -210,25 +209,25 @@ function NewDataTable({
         {selectedIds.length > 0 && (
           <div className="flex gap-2">
             <button
-              onClick={() => onBulkAction(selectedIds, "validate")}
+              onClick={() => onBulkAction(selectedIds, "keep")}
               className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600 flex items-center gap-1"
             >
               <CheckCircle className="h-3 w-3" />
-              Valider ({selectedIds.length})
+              Intégrer ({selectedIds.length})
             </button>
             <button
-              onClick={() => onBulkAction(selectedIds, "reject")}
+              onClick={() => onBulkAction(selectedIds, "delete")}
               className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600 flex items-center gap-1"
             >
-              <XCircle className="h-3 w-3" />
-              Rejeter ({selectedIds.length})
+              <Trash2 className="h-3 w-3" />
+              Supprimer ({selectedIds.length})
             </button>
           </div>
         )}
       </div>
 
-      <div className="border rounded-lg overflow-hidden">
-        <table className="w-full">
+      <div className="border rounded-lg overflow-x-auto">
+        <table className="w-full min-w-[800px]">
           <thead className="bg-muted/50">
             <tr className="border-b">
               <th className="w-8 p-3">
@@ -239,13 +238,11 @@ function NewDataTable({
                   className="rounded border-gray-300"
                 />
               </th>
-              <th className="text-left p-3 font-medium">Code</th>
+              <th className="text-left p-3 font-medium">Code / Équipement</th>
               <th className="text-left p-3 font-medium">Type</th>
-              <th className="text-left p-3 font-medium">Titre</th>
-              <th className="text-left p-3 font-medium">Source</th>
+              <th className="text-left p-3 font-medium">Description</th>
+              <th className="text-left p-3 font-medium">Détecté le</th>
               <th className="text-left p-3 font-medium">Statut</th>
-              <th className="text-left p-3 font-medium">Priorité</th>
-              <th className="text-left p-3 font-medium">Soumis le</th>
               <th className="text-left p-3 font-medium">Actions</th>
             </tr>
           </thead>
@@ -260,74 +257,34 @@ function NewDataTable({
                     className="rounded border-gray-300"
                   />
                 </td>
-                <td className="p-3 font-mono text-sm">{record.code}</td>
                 <td className="p-3">
-                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100">
-                    {getTypeLabel(record.type)}
+                  <div className="font-mono text-sm">{record.code}</div>
+                  <div className="font-medium text-sm mt-1">{record.title}</div>
+                 </td>
+                <td className="p-3">
+                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                    {record.type}
                   </span>
                 </td>
-                <td className="p-3 max-w-xs truncate">
-                  <div>
-                    <p className="font-medium">{record.title}</p>
-                    <p className="text-xs text-muted-foreground truncate">{record.description}</p>
-                  </div>
-                </td>
-                <td className="p-3 text-sm">
-                  {record.source === "kobo" ? "Kobo Toolbox" :
-                   record.source === "mobile_app" ? "App Mobile" :
-                   record.source === "web_form" ? "Formulaire Web" : "Import API"}
-                </td>
+                <td className="p-3 max-w-xs">
+                  <p className="text-sm text-muted-foreground truncate">{record.description}</p>
+                 </td>
+                <td className="p-3 text-sm">{record.submissionDate}</td>
                 <td className="p-3">
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(record.validationStatus)}`}>
                     {getStatusLabel(record.validationStatus)}
                   </span>
                 </td>
                 <td className="p-3">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(record.priority)}`}>
-                    {record.priority === "high" ? "Élevée" :
-                     record.priority === "medium" ? "Moyenne" : "Faible"}
-                  </span>
-                </td>
-                <td className="p-3 text-sm">{record.submissionDate}</td>
-                <td className="p-3">
                   <div className="flex gap-2">
                     <button
                       onClick={() => onView(record)}
-                      className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
+                      className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1 cursor-pointer"
                     >
                       <Eye className="h-3 w-3" />
                       Voir
                     </button>
-                    {record.validationStatus === "pending" && (
-                      <button
-                        onClick={() => onReview(record)}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        Analyser
-                      </button>
-                    )}
-                    {record.validationStatus === "reviewing" && (
-                      <>
-                        <button
-                          onClick={() => onValidate(record)}
-                          className="text-green-600 hover:text-green-800 text-sm"
-                        >
-                          Valider
-                        </button>
-                        <button
-                          onClick={() => onReject(record)}
-                          className="text-red-600 hover:text-red-800 text-sm"
-                        >
-                          Rejeter
-                        </button>
-                      </>
-                    )}
-                    <button
-                      onClick={() => onAssign(record)}
-                      className="text-purple-600 hover:text-purple-800 text-sm"
-                    >
-                      Assigner
-                    </button>
+                   
                   </div>
                 </td>
               </tr>
@@ -336,7 +293,7 @@ function NewDataTable({
         </table>
         {filteredRecords.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
-            Aucune nouvelle donnée trouvée
+            Aucune nouvelle donnée trouvée pour ce départ
           </div>
         )}
       </div>
@@ -349,192 +306,139 @@ function NewDataDetailModal({
   record, 
   isOpen, 
   onClose, 
-  onValidate, 
-  onReject, 
-  onReview,
-  onAssign 
+  onKeep, 
+  onDelete 
 }: { 
   record: NewDataRecord | null;
   isOpen: boolean;
   onClose: () => void;
-  onValidate: (record: NewDataRecord) => void;
-  onReject: (record: NewDataRecord) => void;
-  onReview: (record: NewDataRecord) => void;
-  onAssign: (record: NewDataRecord) => void;
+  onKeep: (record: NewDataRecord) => void;
+  onDelete: (record: NewDataRecord) => void;
 }) {
-  const [assignmentComment, setAssignmentComment] = useState("");
-  const [selectedAssignee, setSelectedAssignee] = useState("");
-
   if (!isOpen || !record) return null;
 
-  const getTypeLabel = (type: DataType) => {
-    const labels = {
-      customer: "Nouveau client",
-      meter: "Installation compteur",
-      reading: "Relevé terrain",
-      complaint: "Réclamation",
-      survey: "Enquête",
-      installation: "Demande d'installation"
-    };
-    return labels[type];
-  };
+  const allFields = record.rawAnomaly.layer2Record 
+    ? Object.entries(record.rawAnomaly.layer2Record)
+        .filter(([key]) => key !== "m_rid")
+        .sort((a, b) => a[0].localeCompare(b[0]))
+    : [];
 
-  const handleAssign = () => {
-    if (selectedAssignee) {
-      onAssign(record);
-      toast.success(`Donnée assignée à ${selectedAssignee}`);
-    } else {
-      toast.warning("Veuillez sélectionner un responsable");
-    }
+  // Obtenir un libellé lisible pour un champ
+  const getFieldLabel = (key: string): string => {
+    const labels: Record<string, string> = {
+      name: "Nom",
+      code: "Code",
+      type: "Type",
+      voltage: "Tension (kV)",
+      active: "Actif",
+      created_date: "Date création",
+      display_scada: "Affiché SCADA",
+      apparent_power: "Puissance (kVA)",
+      substation_id: "Poste source",
+      feeder_id: "Départ",
+      phase: "Phase",
+      localisation: "Localisation",
+      regime: "Régime",
+      section: "Section",
+      nature_conducteur: "Nature conducteur",
+      height: "Hauteur (m)",
+      latitude: "Latitude",
+      longitude: "Longitude",
+      w1_voltage: "Tension primaire",
+      w2_voltage: "Tension secondaire",
+    };
+    return labels[key] || key;
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
+      <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[95vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-2">
           <h2 className="text-xl font-semibold flex items-center gap-2">
-            <FilePlus className="h-5 w-5 text-success" />
-            Détails de la nouvelle donnée
+            <FilePlus className="h-5 w-5 text-green-600" />
+            Nouvel équipement détecté
           </h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
             ✕
           </button>
         </div>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Code</label>
-              <p className="font-mono">{record.code}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Type</label>
-              <p>{getTypeLabel(record.type)}</p>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Titre</label>
-            <p className="font-medium">{record.title}</p>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Description</label>
-            <p className="text-gray-700">{record.description}</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Source</label>
-              <p className="flex items-center gap-1">
-                {record.source === "kobo" ? "Kobo Toolbox" :
-                 record.source === "mobile_app" ? "Application Mobile" :
-                 record.source === "web_form" ? "Formulaire Web" : "Import API"}
-              </p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Soumis par</label>
-              <p>{record.submittedBy}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Date de soumission</label>
-              <p>{record.submissionDate}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Priorité</label>
-              <p className="capitalize">{record.priority}</p>
-            </div>
-          </div>
-
-          {record.metadata && (
-            <div className="border-t pt-4">
-              <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                Métadonnées additionnelles
-              </label>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                {record.metadata.latitude && (
-                  <div>
-                    <span className="text-muted-foreground">Latitude:</span>
-                    <span className="ml-2">{record.metadata.latitude.toFixed(6)}</span>
-                  </div>
-                )}
-                {record.metadata.longitude && (
-                  <div>
-                    <span className="text-muted-foreground">Longitude:</span>
-                    <span className="ml-2">{record.metadata.longitude.toFixed(6)}</span>
-                  </div>
-                )}
-                {record.metadata.photos && record.metadata.photos > 0 && (
-                  <div>
-                    <span className="text-muted-foreground">Photos:</span>
-                    <span className="ml-2">{record.metadata.photos} fichier(s)</span>
-                  </div>
-                )}
-                {record.metadata.attachments && record.metadata.attachments.length > 0 && (
-                  <div>
-                    <span className="text-muted-foreground">Pièces jointes:</span>
-                    <span className="ml-2">{record.metadata.attachments.length} document(s)</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="border-t pt-4">
-            <label className="text-sm font-medium text-muted-foreground mb-2 block">
-              Assigner à un responsable
-            </label>
-            <select
-              value={selectedAssignee}
-              onChange={(e) => setSelectedAssignee(e.target.value)}
-              className="w-full p-2 border rounded-md"
-            >
-              <option value="">Sélectionner un responsable</option>
-              <option value="Jean Dupont">Jean Dupont - Service Client</option>
-              <option value="Marie Kouam">Marie Kouam - Technique</option>
-              <option value="Paul Ndi">Paul Ndi - Facturation</option>
-              <option value="Claire Biya">Claire Biya - Supervision</option>
-            </select>
+         {/* Actions */}
+          <div className="flex gap-3 py-2 border-t">
             <button
-              onClick={handleAssign}
-              className="mt-2 px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm"
+              onClick={() => onKeep(record)}
+              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
             >
-              Assigner
+              <Save className="h-4 w-4" />
+              Intégrer à la base de référence
+            </button>
+            <button
+              onClick={() => onDelete(record)}
+              className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              Supprimer de la collecte
             </button>
           </div>
 
-          <div className="flex gap-2 pt-4 border-t">
-            {record.validationStatus === "pending" && (
-              <button
-                onClick={() => onReview(record)}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-2"
-              >
-                <Eye className="h-4 w-4" />
-                Analyser
-              </button>
-            )}
-            {record.validationStatus === "reviewing" && (
-              <>
-                <button
-                  onClick={() => onValidate(record)}
-                  className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 flex items-center gap-2"
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  Valider et intégrer
-                </button>
-                <button
-                  onClick={() => onReject(record)}
-                  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 flex items-center gap-2"
-                >
-                  <XCircle className="h-4 w-4" />
-                  Rejeter
-                </button>
-              </>
+        <div className="space-y-2">
+          {/* Informations générales */}
+          <div className="grid grid-cols-2 p-2 bg-muted/30 rounded-lg">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Type d'équipement
+              </label>
+              <p className="font-medium">{record.type}</p>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                ID technique
+              </label>
+              <p className="font-mono text-sm">{record.rawAnomaly.mrid}</p>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Date de détection
+              </label>
+              <p>{record.submissionDate}</p>
+            </div>
+            {record.rawAnomaly.feederName && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Départ
+                </label>
+                <p>{record.rawAnomaly.feederName}</p>
+              </div>
             )}
           </div>
+
+          {/* Détails complets de l'équipement */}
+          <div>
+            <label className="text-sm font-medium text-muted-foreground mb-2 block">
+              Détails de l'équipement collecté
+            </label>
+            <div className="border rounded-lg overflow-hidden">
+              <div className="grid grid-cols-2 gap-2 p-4">
+                {allFields.map(([key, value]) => (
+                  <div key={key} className="border-b border-gray-100 py-2">
+                    <span className="text-xs text-muted-foreground block">
+                      {getFieldLabel(key)}
+                    </span>
+                    <span className="text-sm font-mono break-all">
+                      {formatValue(value)}
+                    </span>
+                  </div>
+                ))}
+                {allFields.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4 col-span-2">
+                    Aucun détail disponible
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+         
         </div>
       </div>
     </div>
@@ -558,12 +462,23 @@ export default function NewDataPage() {
   const [selectedRecord, setSelectedRecord] = useState<NewDataRecord | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
-  // Generate new data for selected departure
+  // Récupérer les vraies nouvelles données pour le départ sélectionné
   const newDataRecords = useMemo(() => {
-    if (selectedDeparture) {
-      return generateMockNewData(selectedDeparture.id, selectedDeparture.equipmentCount);
+    if (!selectedDeparture) return [];
+    
+    // Récupérer les anomalies de type "new" pour ce départ
+    const anomalies = getAnomaliesByFeeder(selectedDeparture.feederId, "new");
+    
+    // Convertir chaque anomalie en NewDataRecord
+    const records: NewDataRecord[] = [];
+    for (const anomaly of anomalies) {
+      const converted = convertAnomalyToNewData(anomaly);
+      if (converted) {
+        records.push(converted);
+      }
     }
-    return [];
+    
+    return records;
   }, [selectedDeparture]);
 
   // Filter new data records
@@ -574,30 +489,29 @@ export default function NewDataPage() {
       (record) =>
         record.code.toLowerCase().includes(query) ||
         record.title.toLowerCase().includes(query) ||
+        record.type.toLowerCase().includes(query) ||
         record.description.toLowerCase().includes(query)
     );
   }, [newDataRecords, searchQuery]);
 
-  // Calculate global stats
+  // Calculer les stats globales
   const globalStats = useMemo(() => {
-    let total = 0;
-    let pending = 0;
-    let reviewing = 0;
-    let validated = 0;
-
+    let totalNewData = 0;
+    
     eneoRegions.forEach((region) => {
-      const stats = getRegionStats(region.id);
-      total += stats.total;
-      pending += stats.pending;
-      reviewing += stats.inProgress;
-      validated += stats.completed;
+      region.zones.forEach((zone) => {
+        zone.departures.forEach((departure) => {
+          const anomalies = getAnomaliesByFeeder(departure.feederId, "new");
+          totalNewData += anomalies.length;
+        });
+      });
     });
 
     return {
-      total,
-      pendingAndInProgress: pending + reviewing,
-      completed: validated,
-      completionRate: total > 0 ? Math.round((validated / total) * 100) : 0,
+      total: totalNewData,
+      pendingAndInProgress: totalNewData,
+      completed: 0,
+      completionRate: 0,
     };
   }, []);
 
@@ -658,29 +572,24 @@ export default function NewDataPage() {
     setIsDetailModalOpen(true);
   };
 
-  const handleValidateRecord = (record: NewDataRecord) => {
-    toast.success(`Donnée ${record.code} validée et intégrée`);
+  const handleKeepRecord = (record: NewDataRecord) => {
+    toast.success(`Équipement ${record.title} intégré à la base de référence`);
     setIsDetailModalOpen(false);
   };
 
-  const handleRejectRecord = (record: NewDataRecord) => {
-    toast.info(`Donnée ${record.code} rejetée`);
+  const handleDeleteRecord = (record: NewDataRecord) => {
+    toast.info(`Équipement ${record.title} supprimé de la collecte`);
     setIsDetailModalOpen(false);
   };
 
   const handleReviewRecord = (record: NewDataRecord) => {
-    toast.info(`Analyse de la donnée ${record.code} en cours`);
     setSelectedRecord(record);
     setIsDetailModalOpen(true);
   };
 
-  const handleAssignRecord = (record: NewDataRecord) => {
-    toast.success(`Donnée ${record.code} assignée à un responsable`);
-    setIsDetailModalOpen(false);
-  };
-
   const handleBulkAction = (recordIds: string[], action: string) => {
-    toast.success(`${recordIds.length} donnée(s) ${action === "validate" ? "validées" : "rejetées"}`);
+    const actionLabel = action === "keep" ? "intégrés" : "supprimés";
+    toast.success(`${recordIds.length} équipement(s) ${actionLabel}`);
   };
 
   // Filter regions by search
@@ -695,7 +604,6 @@ export default function NewDataPage() {
     );
   }, [searchQuery]);
 
-  // Filter zones by search
   const filteredZones = useMemo(() => {
     if (!selectedRegion) return [];
     if (!searchQuery) return selectedRegion.zones;
@@ -705,7 +613,6 @@ export default function NewDataPage() {
     );
   }, [selectedRegion, searchQuery]);
 
-  // Filter departures by search
   const filteredDepartures = useMemo(() => {
     if (!selectedZone) return [];
     if (!searchQuery) return selectedZone.departures;
@@ -721,11 +628,11 @@ export default function NewDataPage() {
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-            <FilePlus className="h-7 w-7 text-success" />
+            <FilePlus className="h-7 w-7 text-green-600" />
             Nouvelles Données
           </h1>
           <p className="text-muted-foreground mt-1">
-            Validation et intégration des données collectées via Kobo et autres sources
+            Équipements détectés sur le terrain et absents de la base de référence
           </p>
         </div>
         <PeriodFilter value={period} onChange={setPeriod} />
@@ -763,7 +670,20 @@ export default function NewDataPage() {
           <h2 className="text-xl font-semibold mb-4">Découpage Eneo ({filteredRegions.length})</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredRegions.map((region) => {
-              const stats = getRegionStats(region.id);
+              let regionNewCount = 0;
+              region.zones.forEach(zone => {
+                zone.departures.forEach(departure => {
+                  regionNewCount += getAnomaliesByFeeder(departure.feederId, "new").length;
+                });
+              });
+              
+              const stats = {
+                total: regionNewCount,
+                pending: regionNewCount,
+                inProgress: 0,
+                completed: 0
+              };
+              
               return (
                 <RegionCard
                   key={region.id}
@@ -792,7 +712,18 @@ export default function NewDataPage() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredZones.map((zone) => {
-              const stats = getZoneStats(zone.id);
+              let zoneNewCount = 0;
+              zone.departures.forEach(departure => {
+                zoneNewCount += getAnomaliesByFeeder(departure.feederId, "new").length;
+              });
+              
+              const stats = {
+                total: zoneNewCount,
+                pending: zoneNewCount,
+                inProgress: 0,
+                completed: 0
+              };
+              
               return (
                 <ZoneCard
                   key={zone.id}
@@ -816,20 +747,19 @@ export default function NewDataPage() {
       {viewLevel === "departures" && selectedZone && (
         <div>
           <h2 className="text-xl font-semibold mb-4">
-            Departs de {selectedZone.name} ({filteredDepartures.length})
+            Départs de {selectedZone.name} ({filteredDepartures.length})
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredDepartures.map((departure) => {
-              const completed = Math.floor(departure.equipmentCount * 0.6);
-              const pending = departure.equipmentCount - completed;
+              const newCount = getAnomaliesByFeeder(departure.feederId, "new").length;
               return (
                 <DepartureCard
                   key={departure.id}
                   code={departure.code}
                   name={departure.name}
-                  equipmentCount={departure.equipmentCount}
-                  completedCount={completed}
-                  pendingCount={pending}
+                  equipmentCount={newCount}
+                  completedCount={0}
+                  pendingCount={newCount}
                   onClick={() => handleDepartureClick(departure)}
                 />
               );
@@ -837,7 +767,7 @@ export default function NewDataPage() {
           </div>
           {filteredDepartures.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
-              Aucun depart trouvé pour &quot;{searchQuery}&quot;
+              Aucun départ trouvé pour &quot;{searchQuery}&quot;
             </div>
           )}
         </div>
@@ -847,28 +777,28 @@ export default function NewDataPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">
-              Nouvelles données du depart {selectedDeparture.code} ({filteredRecords.length})
+              Nouvelles données du départ {selectedDeparture.code} ({filteredRecords.length})
             </h2>
           </div>
           
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <FilePlus className="h-5 w-5" />
-                Données collectées à valider
+                <FilePlus className="h-5 w-5 text-green-600" />
+                Équipements détectés sur le terrain
               </CardTitle>
               <CardDescription>
-                Gérez les nouvelles données collectées pour le depart {selectedDeparture.name}
+                Ces équipements sont présents dans la collecte terrain mais absents de la base de référence.
+                Choisissez de les intégrer ou de les supprimer.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <NewDataTable
                 records={filteredRecords}
                 onView={handleViewRecord}
-                onValidate={handleValidateRecord}
-                onReject={handleRejectRecord}
+                onKeep={handleKeepRecord}
+                onDelete={handleDeleteRecord}
                 onReview={handleReviewRecord}
-                onAssign={handleAssignRecord}
                 onBulkAction={handleBulkAction}
               />
             </CardContent>
@@ -881,10 +811,8 @@ export default function NewDataPage() {
         record={selectedRecord}
         isOpen={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
-        onValidate={handleValidateRecord}
-        onReject={handleRejectRecord}
-        onReview={handleReviewRecord}
-        onAssign={handleAssignRecord}
+        onKeep={handleKeepRecord}
+        onDelete={handleDeleteRecord}
       />
     </div>
   );

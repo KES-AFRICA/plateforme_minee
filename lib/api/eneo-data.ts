@@ -11,9 +11,14 @@ import { runComparison } from "./services/comparison.service";
 import { layer1DB } from "@/data/layer1";
 import { layer2DB } from "@/data/layer2";
 
+export interface ComplexCaseStats {
+total: number;
+    pending: number;
+    inProgress: number;
+    completed: number;
+}
+
 // ─── Structure de navigation DRD-O (Douala Ouest) ────────────────────────
-// Découpage : DRD > DRD-O > Bonaberi > D11 / D12
-// Adapté à votre BD qui ne couvre que Douala Ouest
 
 export interface EneoDeparture {
   id: string;
@@ -27,6 +32,13 @@ export interface EneoDeparture {
     new: number;
     missing: number;
     complex: number;
+  };
+  // Nouveaux champs pour les KPIs des manquants
+  collectionStats?: {
+    totalAttendu: number;           // tous les équipements Layer1
+    collectes: number;              // équipements Layer1 présents dans Layer2 (bon + divergence + duplicate)
+    manquantsRestants: number;      // ce qui reste à collecter
+    tauxProgression: number;        // pourcentage de collecte
   };
 }
 
@@ -47,27 +59,22 @@ export interface EneoRegion {
 
 // ─── Caches pour les résolutions de relations ────────────────────────────────
 
-// Cache substation → feeder
 const substationToFeederCache = new Map<string, string>();
-
-// Cache bay → substation
 const bayToSubstationCache = new Map<string, string>();
-
-// Cache pole → feeder
 const poleToFeederCache = new Map<string, string>();
+
+// Cache pour les équipements Layer1 présents dans Layer2
+// Structure: Map<feederId, Set<mrid>>
+const collectedEquipmentCache = new Map<string, Set<string>>();
 
 // ─── Fonctions de résolution des relations ───────────────────────────────────
 
-/**
- * Récupère le feeder_id d'une substation
- */
 function getFeederIdForSubstation(substationId: string | number): string | null {
   const key = String(substationId);
   if (substationToFeederCache.has(key)) {
     return substationToFeederCache.get(key) || null;
   }
   
-  // Chercher d'abord dans BD1
   const substation = layer1DB.substation.find(s => String(s.m_rid) === key);
   if (substation && substation.feeder_id) {
     const feederId = String(substation.feeder_id);
@@ -75,7 +82,6 @@ function getFeederIdForSubstation(substationId: string | number): string | null 
     return feederId;
   }
   
-  // Chercher dans BD2 si pas trouvé dans BD1
   const substationL2 = (layer2DB.substation || []).find(s => String(s.m_rid) === key);
   if (substationL2 && substationL2.feeder_id) {
     const feederId = String(substationL2.feeder_id);
@@ -87,9 +93,6 @@ function getFeederIdForSubstation(substationId: string | number): string | null 
   return null;
 }
 
-/**
- * Récupère le feeder_id d'une bay (via substation)
- */
 function getFeederIdForBay(bayId: string | number): string | null {
   const key = String(bayId);
   if (bayToSubstationCache.has(key)) {
@@ -100,7 +103,6 @@ function getFeederIdForBay(bayId: string | number): string | null {
     return null;
   }
   
-  // Chercher dans BD1
   const bay = layer1DB.bay.find(b => String(b.m_rid) === key);
   if (bay && bay.substation_id) {
     const substationId = String(bay.substation_id);
@@ -108,7 +110,6 @@ function getFeederIdForBay(bayId: string | number): string | null {
     return getFeederIdForSubstation(substationId);
   }
   
-  // Chercher dans BD2
   const bayL2 = (layer2DB.bay || []).find(b => String(b.m_rid) === key);
   if (bayL2 && bayL2.substation_id) {
     const substationId = String(bayL2.substation_id);
@@ -120,16 +121,12 @@ function getFeederIdForBay(bayId: string | number): string | null {
   return null;
 }
 
-/**
- * Récupère le feeder_id d'un poteau
- */
 function getFeederIdForPole(poleId: string | number): string | null {
   const key = String(poleId);
   if (poleToFeederCache.has(key)) {
     return poleToFeederCache.get(key) || null;
   }
   
-  // Chercher dans BD1
   const pole = layer1DB.pole.find(p => String(p.m_rid) === key);
   if (pole && pole.feeder_id) {
     const feederId = String(pole.feeder_id);
@@ -137,7 +134,6 @@ function getFeederIdForPole(poleId: string | number): string | null {
     return feederId;
   }
   
-  // Chercher dans BD2
   const poleL2 = (layer2DB.pole || []).find(p => String(p.m_rid) === key);
   if (poleL2 && poleL2.feeder_id) {
     const feederId = String(poleL2.feeder_id);
@@ -149,31 +145,23 @@ function getFeederIdForPole(poleId: string | number): string | null {
   return null;
 }
 
-/**
- * Fonction principale : extrait le feeder_id d'un enregistrement
- * Gère toutes les tables avec leurs relations spécifiques
- */
 function extractFeederId(record: Record<string, unknown> | null): string {
   if (!record) return "";
   
-  // 1. Champ direct feeder_id (substation, wire, pole, feeder)
   if (record.feeder_id) {
     return String(record.feeder_id);
   }
   
-  // 2. Par substation_id (powertransformer, busbar, bay)
   if (record.substation_id) {
     const feederId = getFeederIdForSubstation(String(record.substation_id));
     if (feederId) return feederId;
   }
   
-  // 3. Par bay_mrid (switch)
   if (record.bay_mrid) {
     const feederId = getFeederIdForBay(String(record.bay_mrid));
     if (feederId) return feederId;
   }
   
-  // 4. Par pole_id (node)
   if (record.pole_id) {
     const feederId = getFeederIdForPole(String(record.pole_id));
     if (feederId) return feederId;
@@ -182,12 +170,98 @@ function extractFeederId(record: Record<string, unknown> | null): string {
   return "";
 }
 
+// ─── Fonction pour calculer les équipements déjà collectés ───────────────────
+
+/**
+ * Construit un cache des équipements Layer1 qui ont une correspondance dans Layer2
+ * (peu importe si c'est bon, divergent ou en doublon)
+ */
+function buildCollectedEquipmentCache(): void {
+  const result = getComparison();
+  
+  // Parcourir tous les cas d'anomalie
+  for (const c of result.cases) {
+    // Si c'est un cas "missing", l'équipement n'est PAS collecté
+    if (c.type === "missing") continue;
+    
+    // Pour tous les autres types (duplicate, divergence, new, complex)
+    // L'équipement a une présence dans Layer2
+    if (c.layer1Record) {
+      const feederId = extractFeederId(c.layer1Record);
+      const mrid = String(c.mrid);
+      
+      if (feederId) {
+        if (!collectedEquipmentCache.has(feederId)) {
+          collectedEquipmentCache.set(feederId, new Set());
+        }
+        collectedEquipmentCache.get(feederId)!.add(mrid);
+      }
+    }
+  }
+}
+
+// ─── Fonctions pour les KPIs des manquants ───────────────────────────────────
+
+/**
+ * Calcule les statistiques de collecte pour un feeder donné
+ */
+function getCollectionStatsForFeeder(feederId: string | number): {
+  totalAttendu: number;
+  collectes: number;
+  manquantsRestants: number;
+  tauxProgression: number;
+} {
+  const feederStr = String(feederId);
+  
+  // Compter tous les équipements Layer1 pour ce feeder
+  const tables: TableName[] = ["substation", "powertransformer", "busbar", "bay", "switch", "wire", "pole", "node"];
+  let totalAttendu = 0;
+  const layer1Mrids: string[] = [];
+  
+  for (const table of tables) {
+    const records = layer1DB[table] as unknown as Array<Record<string, unknown>>;
+    if (!records) continue;
+    
+    for (const record of records) {
+      const fid = extractFeederId(record);
+      if (fid === feederStr) {
+        totalAttendu++;
+        layer1Mrids.push(String(record.m_rid));
+      }
+    }
+  }
+  
+  // Récupérer les équipements collectés depuis le cache
+  const collectedSet = collectedEquipmentCache.get(feederStr) || new Set();
+  
+  // Compter combien d'équipements Layer1 sont dans le cache
+  let collectes = 0;
+  for (const mrid of layer1Mrids) {
+    if (collectedSet.has(mrid)) {
+      collectes++;
+    }
+  }
+  
+  const manquantsRestants = totalAttendu - collectes;
+  const tauxProgression = totalAttendu > 0 ? Math.round((collectes / totalAttendu) * 100) : 0;
+  
+  return {
+    totalAttendu,
+    collectes,
+    manquantsRestants,
+    tauxProgression,
+  };
+}
+
 // ─── Singleton : comparaison lancée une seule fois ────────────────────────
+
 let _comparisonCache: ReturnType<typeof runComparison> | null = null;
 
 function getComparison() {
   if (!_comparisonCache) {
     _comparisonCache = runComparison();
+    // Une fois la comparaison chargée, construire le cache des équipements collectés
+    buildCollectedEquipmentCache();
   }
   return _comparisonCache;
 }
@@ -198,14 +272,14 @@ function buildDeparture(feederId: number | string, feederName: string): EneoDepa
   const result = getComparison();
   const feederStr = String(feederId);
 
-  // Anomalies relatives à ce départ (avec résolution des relations)
+  // Anomalies relatives à ce départ
   const feederCases = result.cases.filter((c) => {
     const fid1 = extractFeederId(c.layer1Record);
     const fid2 = extractFeederId(c.layer2Record);
     return fid1 === feederStr || fid2 === feederStr;
   });
 
-  // Nombre total d'équipements BD1 pour ce départ (toutes tables)
+  // Nombre total d'équipements BD1 pour ce départ
   const tables: TableName[] = ["substation", "powertransformer", "busbar", "bay", "switch", "wire", "pole", "node"];
   let equipmentCount = 0;
   for (const table of tables) {
@@ -217,6 +291,9 @@ function buildDeparture(feederId: number | string, feederName: string): EneoDepa
       return fid === feederStr;
     }).length;
   }
+
+  // Calculer les stats de collecte pour ce feeder
+  const collectionStats = getCollectionStatsForFeeder(feederId);
 
   return {
     id: feederStr,
@@ -231,12 +308,12 @@ function buildDeparture(feederId: number | string, feederName: string): EneoDepa
       missing: feederCases.filter((c) => c.type === "missing").length,
       complex: feederCases.filter((c) => c.type === "complex").length,
     },
+    collectionStats,
   };
 }
 
 // ─── Hiérarchie statique DRD-O avec données réelles ──────────────────────
 
-// Récupérer les feeders depuis layer1DB
 const feeders = layer1DB.feeder;
 
 export const eneoRegions: EneoRegion[] = [
@@ -280,6 +357,49 @@ export function getComparisonStats() {
   return getComparison().stats;
 }
 
+// ─── Nouvelles fonctions pour les KPIs des manquants ─────────────────────
+
+/**
+ * Récupère les statistiques de collecte pour un départ donné
+ */
+export function getCollectionStats(feederId: string | number): {
+  totalAttendu: number;
+  collectes: number;
+  manquantsRestants: number;
+  tauxProgression: number;
+} {
+  return getCollectionStatsForFeeder(feederId);
+}
+
+/**
+ * Récupère les statistiques globales pour la page des manquants
+ */
+export function getGlobalMissingStats() {
+  let totalAttendu = 0;
+  let totalCollectes = 0;
+  
+  eneoRegions.forEach((region) => {
+    region.zones.forEach((zone) => {
+      zone.departures.forEach((departure) => {
+        if (departure.collectionStats) {
+          totalAttendu += departure.collectionStats.totalAttendu;
+          totalCollectes += departure.collectionStats.collectes;
+        }
+      });
+    });
+  });
+  
+  const manquantsRestants = totalAttendu - totalCollectes;
+  const tauxProgression = totalAttendu > 0 ? Math.round((totalCollectes / totalAttendu) * 100) : 0;
+  
+  return {
+    totalAttendu,
+    totalCollectes,
+    manquantsRestants,
+    tauxProgression,
+  };
+}
+
 // ─── Compatibilité avec les fonctions getRegionStats / getZoneStats ───────
 
 export function getRegionStats(regionId: string) {
@@ -288,12 +408,11 @@ export function getRegionStats(regionId: string) {
     total: result.stats.total,
     pending: result.stats.missing + result.stats.new,
     inProgress: result.stats.duplicate + result.stats.divergence + result.stats.complex,
-    completed: 0, // aucun cas résolu automatiquement
+    completed: 0,
   };
 }
 
 export function getZoneStats(zoneId: string) {
-  // Pour l'instant une seule zone DRD-O → même stats
   return getRegionStats(zoneId);
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useI18n } from "@/lib/i18n/context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,163 +10,156 @@ import { DepartureCard } from "@/components/complex-cases/departure-card";
 import { PeriodFilter, PeriodType } from "@/components/complex-cases/period-filter";
 import { GlobalStatsCards } from "@/components/complex-cases/global-stats-cards";
 import { NavigationBreadcrumb, BreadcrumbItem } from "@/components/complex-cases/navigation-breadcrumb";
-//import { eneoRegions, getRegionStats, getZoneStats, EneoRegion, EneoZone, EneoDeparture } from "@/lib/api/eneo-data";
-import { Search, FileX, Upload, AlertCircle, CheckCircle, Clock } from "lucide-react";
+import { Search, FileX, AlertCircle, CheckCircle, MapPin, Calendar, Clock } from "lucide-react";
 import { toast } from "sonner";
-import { eneoRegions, getRegionStats, getZoneStats, EneoRegion, EneoZone, EneoDeparture  } from "@/lib/api/eneo-data";
+import { 
+  eneoRegions, 
+  getAnomaliesByFeeder, 
+  EneoRegion, 
+  EneoZone, 
+  EneoDeparture,
+  AnomalyCase,
+  getGlobalMissingStats
+} from "@/lib/api/eneo-data";
 
 type ViewLevel = "regions" | "zones" | "departures" | "missing";
 
-// Types pour les enregistrements manquants
-type MissingType = "customer" | "meter" | "reading" | "invoice" | "contract";
-type MissingSeverity = "critical" | "high" | "medium" | "low";
-type MissingStatus = "pending" | "investigating" | "resolved" | "ignored";
-
+// Type pour les enregistrements manquants basé sur les anomalies réelles
 interface MissingRecord {
   id: string;
   code: string;
-  type: MissingType;
+  type: string;
+  table: string;
+  name: string;
   description: string;
-  severity: MissingSeverity;
-  status: MissingStatus;
   expectedDate: string;
-  lastKnownDate?: string;
-  assignedTo?: string;
-  impact: string;
-  suggestedAction: string;
+  location?: string;
+  metadata: {
+    [key: string]: unknown;
+  };
+  rawAnomaly: AnomalyCase;
 }
 
-// Générer des enregistrements manquants mock
-function generateMockMissingRecords(departureId: string, count: number): MissingRecord[] {
-  const types: MissingType[] = ["customer", "meter", "reading", "invoice", "contract"];
-  const typeLabels = {
-    customer: "Client",
-    meter: "Compteur",
-    reading: "Relevé",
-    invoice: "Facture",
-    contract: "Contrat"
+// Obtenir le libellé du type d'équipement
+function getEquipmentTypeLabel(table: string): string {
+  const labels: Record<string, string> = {
+    substation: "Poste source",
+    powertransformer: "Transformateur",
+    busbar: "Jeu de barres",
+    bay: "Départ",
+    switch: "Disjoncteur",
+    wire: "Ligne",
+    pole: "Poteau",
+    node: "Nœud réseau",
+    feeder: "Départ",
+  };
+  return labels[table] || table;
+}
+
+// Formater une valeur pour l'affichage
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") return value ? "Oui" : "Non";
+  if (value instanceof Date) return value.toLocaleString();
+  if (typeof value === "object") return JSON.stringify(value).substring(0, 100);
+  return String(value);
+}
+
+// Obtenir un nom lisible pour l'enregistrement
+function getRecordName(record: Record<string, unknown>, table: string): string {
+  if (record.name) return String(record.name);
+  if (record.code) return String(record.code);
+  if (record.local_name) return String(record.local_name);
+  return `${getEquipmentTypeLabel(table)} ${record.m_rid}`;
+}
+
+// Obtenir une description des champs importants
+function getRecordDescription(record: Record<string, unknown>, table: string): string {
+  const importantFields: Record<string, string[]> = {
+    substation: ["type", "regime", "localisation", "voltage"],
+    powertransformer: ["apparent_power", "w1_voltage", "w2_voltage"],
+    busbar: ["voltage", "phase"],
+    bay: ["type", "voltage"],
+    switch: ["nature", "type", "normal_open"],
+    wire: ["nature_conducteur", "section", "phase"],
+    pole: ["height", "type"],
+    node: ["code"],
+    feeder: ["voltage", "is_injection"],
   };
   
-  const descriptions = [
-    "Aucun relevé de consommation pour les 3 derniers mois",
-    "Client non référencé dans le système de facturation",
-    "Compteur non installé malgré la demande",
-    "Facture manquante pour la période de décembre",
-    "Contrat client non signé",
-    "Données de consommation absentes du mois dernier",
-    "Enregistrement client introuvable dans la base",
-    "Relevé terrain non saisi dans le système"
-  ];
+  const fields = importantFields[table] || ["name", "code", "type"];
+  const descriptions = fields
+    .filter(f => record[f] !== undefined && record[f] !== null && record[f] !== "")
+    .map(f => `${f}: ${formatValue(record[f])}`);
   
-  const severities: MissingSeverity[] = ["critical", "high", "medium", "low"];
-  const statuses: MissingStatus[] = ["pending", "investigating", "resolved", "ignored"];
-  const users = ["Jean Dupont", "Marie Kouam", "Paul Ndi", "Claire Biya", undefined];
-  const impacts = [
-    "Impossible de facturer le client",
-    "Retard dans le traitement des paiements",
-    "Non-conformité réglementaire",
-    "Perte de revenus estimée à 500 000 FCFA",
-    "Délai de traitement prolongé de 15 jours"
-  ];
-  const suggestedActions = [
-    "Contacter le client pour obtenir les informations",
-    "Vérifier les logs du système de relevé",
-    "Planifier une visite terrain",
-    "Recréer l'enregistrement dans le système",
-    "Demander une extraction des données historiques"
-  ];
+  if (descriptions.length === 0) return "Équipement à collecter";
+  return descriptions.join(" • ");
+}
 
-  const missingRecords: MissingRecord[] = [];
-
-  for (let i = 0; i < count; i++) {
-    const expectedDate = new Date(Date.now() - Math.floor(Math.random() * 90 * 24 * 60 * 60 * 1000));
-    const lastKnownDate = Math.random() > 0.3 
-      ? new Date(Date.now() - Math.floor(Math.random() * 180 * 24 * 60 * 60 * 1000))
-      : undefined;
-    
-    missingRecords.push({
-      id: `${departureId}-miss-${i + 1}`,
-      code: `MISS-${departureId.toUpperCase()}-${String(i + 1).padStart(3, "0")}`,
-      type: types[Math.floor(Math.random() * types.length)],
-      description: descriptions[Math.floor(Math.random() * descriptions.length)],
-      severity: severities[Math.floor(Math.random() * severities.length)],
-      status: statuses[Math.floor(Math.random() * statuses.length)],
-      expectedDate: expectedDate.toLocaleDateString("fr-FR"),
-      lastKnownDate: lastKnownDate?.toLocaleDateString("fr-FR"),
-      assignedTo: users[Math.floor(Math.random() * users.length)],
-      impact: impacts[Math.floor(Math.random() * impacts.length)],
-      suggestedAction: suggestedActions[Math.floor(Math.random() * suggestedActions.length)],
-    });
+// Obtenir la localisation si disponible
+function getRecordLocation(record: Record<string, unknown>): string | undefined {
+  if (record.localisation && String(record.localisation).trim()) {
+    return String(record.localisation);
   }
+  if (record.latitude && record.longitude) {
+    return `${record.latitude}, ${record.longitude}`;
+  }
+  return undefined;
+}
 
-  return missingRecords;
+// Convertir une anomalie de type "missing" en MissingRecord
+function convertAnomalyToMissing(anomaly: AnomalyCase): MissingRecord | null {
+  if (anomaly.type !== "missing" || !anomaly.layer1Record) return null;
+  
+  const record = anomaly.layer1Record;
+  const table = anomaly.table;
+  const name = getRecordName(record, table);
+  const description = getRecordDescription(record, table);
+  const location = getRecordLocation(record);
+  
+  // Extraire les métadonnées importantes
+  const metadata: Record<string, unknown> = {};
+  const importantFields = ["voltage", "apparent_power", "type", "regime", "section", "height", "phase", "active"];
+  importantFields.forEach(field => {
+    if (record[field] !== undefined && record[field] !== null && record[field] !== "") {
+      metadata[field] = record[field];
+    }
+  });
+  
+  // Date de création ou date attendue
+  const expectedDate = (record.created_date as string)?.split('T')[0] || new Date().toISOString().split('T')[0];
+  
+  return {
+    id: anomaly.id,
+    code: `${table.toUpperCase()}-${record.m_rid || record.code || "MISSING"}`,
+    type: getEquipmentTypeLabel(table),
+    table: table,
+    name: name,
+    description: description,
+    expectedDate: expectedDate,
+    location: location,
+    metadata: metadata,
+    rawAnomaly: anomaly,
+  };
 }
 
 // Composant pour afficher les enregistrements manquants
 function MissingRecordsTable({ 
   records, 
-  onView, 
-  onInvestigate, 
-  onResolve, 
-  onIgnore,
-  onUpload,
+  onView,
   onBulkAction 
 }: { 
   records: MissingRecord[];
   onView: (record: MissingRecord) => void;
-  onInvestigate: (record: MissingRecord) => void;
-  onResolve: (record: MissingRecord) => void;
-  onIgnore: (record: MissingRecord) => void;
-  onUpload: (record: MissingRecord) => void;
   onBulkAction: (ids: string[], action: string) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const getSeverityColor = (severity: MissingSeverity) => {
-    switch (severity) {
-      case "critical": return "text-red-600 bg-red-100";
-      case "high": return "text-orange-600 bg-orange-100";
-      case "medium": return "text-yellow-600 bg-yellow-100";
-      case "low": return "text-blue-600 bg-blue-100";
-      default: return "text-gray-600 bg-gray-100";
-    }
-  };
-
-  const getStatusColor = (status: MissingStatus) => {
-    switch (status) {
-      case "pending": return "text-yellow-600 bg-yellow-100";
-      case "investigating": return "text-blue-600 bg-blue-100";
-      case "resolved": return "text-green-600 bg-green-100";
-      case "ignored": return "text-gray-600 bg-gray-100";
-      default: return "text-gray-600 bg-gray-100";
-    }
-  };
-
-  const getStatusLabel = (status: MissingStatus) => {
-    switch (status) {
-      case "pending": return "En attente";
-      case "investigating": return "En investigation";
-      case "resolved": return "Résolu";
-      case "ignored": return "Ignoré";
-      default: return status;
-    }
-  };
-
-  const getTypeLabel = (type: MissingType) => {
-    const labels = {
-      customer: "Client",
-      meter: "Compteur",
-      reading: "Relevé",
-      invoice: "Facture",
-      contract: "Contrat"
-    };
-    return labels[type];
-  };
-
   const filteredRecords = records.filter(record => 
     record.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    getTypeLabel(record.type).toLowerCase().includes(searchTerm.toLowerCase()) ||
+    record.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    record.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     record.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -190,7 +183,7 @@ function MissingRecordsTable({
         <div className="relative w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Rechercher un enregistrement..."
+            placeholder="Rechercher un équipement..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-9"
@@ -199,23 +192,18 @@ function MissingRecordsTable({
         {selectedIds.length > 0 && (
           <div className="flex gap-2">
             <button
-              onClick={() => onBulkAction(selectedIds, "investigate")}
-              className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+              onClick={() => onBulkAction(selectedIds, "export")}
+              className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-1"
             >
-              Investiguer ({selectedIds.length})
-            </button>
-            <button
-              onClick={() => onBulkAction(selectedIds, "resolve")}
-              className="px-3 py-1 text-sm bg-green-500 text-white rounded hover:bg-green-600"
-            >
-              Résoudre ({selectedIds.length})
+              <FileX className="h-3 w-3" />
+              Exporter liste ({selectedIds.length})
             </button>
           </div>
         )}
       </div>
 
-      <div className="border rounded-lg overflow-hidden">
-        <table className="w-full">
+      <div className="border rounded-lg overflow-x-auto">
+        <table className="w-full min-w-[800px]">
           <thead className="bg-muted/50">
             <tr className="border-b">
               <th className="w-8 p-3">
@@ -226,13 +214,11 @@ function MissingRecordsTable({
                   className="rounded border-gray-300"
                 />
               </th>
-              <th className="text-left p-3 font-medium">Code</th>
+              <th className="text-left p-3 font-medium">Code / Équipement</th>
               <th className="text-left p-3 font-medium">Type</th>
               <th className="text-left p-3 font-medium">Description</th>
-              <th className="text-left p-3 font-medium">Sévérité</th>
-              <th className="text-left p-3 font-medium">Statut</th>
+              <th className="text-left p-3 font-medium">Localisation</th>
               <th className="text-left p-3 font-medium">Date attendue</th>
-              <th className="text-left p-3 font-medium">Assigné à</th>
               <th className="text-left p-3 font-medium">Actions</th>
             </tr>
           </thead>
@@ -247,60 +233,43 @@ function MissingRecordsTable({
                     className="rounded border-gray-300"
                   />
                 </td>
-                <td className="p-3 font-mono text-sm">{record.code}</td>
                 <td className="p-3">
-                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100">
-                    {getTypeLabel(record.type)}
-                  </span>
-                </td>
-                <td className="p-3 max-w-xs truncate">{record.description}</td>
-                <td className="p-3">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getSeverityColor(record.severity)}`}>
-                    {record.severity === "critical" ? "Critique" :
-                     record.severity === "high" ? "Élevée" :
-                     record.severity === "medium" ? "Moyenne" : "Faible"}
-                  </span>
+                  <div className="font-mono text-sm">{record.code}</div>
+                  <div className="font-medium text-sm mt-1">{record.name}</div>
                 </td>
                 <td className="p-3">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}>
-                    {getStatusLabel(record.status)}
+                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                    {record.type}
                   </span>
                 </td>
-                <td className="p-3 text-sm">{record.expectedDate}</td>
-                <td className="p-3 text-sm">{record.assignedTo || "Non assigné"}</td>
+                <td className="p-3 max-w-xs">
+                  <p className="text-sm text-muted-foreground">{record.description}</p>
+                </td>
+                <td className="p-3">
+                  {record.location ? (
+                    <div className="flex items-center gap-1 text-sm">
+                      <MapPin className="h-3 w-3 text-muted-foreground" />
+                      <span className="truncate max-w-[150px]">{record.location}</span>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">—</span>
+                  )}
+                </td>
+                <td className="p-3 text-sm">
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-3 w-3 text-muted-foreground" />
+                    {record.expectedDate}
+                  </div>
+                </td>
                 <td className="p-3">
                   <div className="flex gap-2">
                     <button
                       onClick={() => onView(record)}
-                      className="text-blue-600 hover:text-blue-800 text-sm"
+                      className="text-blue-600 hover:text-blue-800 text-sm flex items-center gap-1"
                     >
-                      Voir
+                      <AlertCircle className="h-3 w-3" />
+                      Détails
                     </button>
-                    {record.status === "pending" && (
-                      <button
-                        onClick={() => onInvestigate(record)}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        Investiguer
-                      </button>
-                    )}
-                    {record.status === "investigating" && (
-                      <>
-                        <button
-                          onClick={() => onResolve(record)}
-                          className="text-green-600 hover:text-green-800 text-sm"
-                        >
-                          Résoudre
-                        </button>
-                        <button
-                          onClick={() => onUpload(record)}
-                          className="text-purple-600 hover:text-purple-800 text-sm flex items-center gap-1"
-                        >
-                          <Upload className="h-3 w-3" />
-                          Importer
-                        </button>
-                      </>
-                    )}
                   </div>
                 </td>
               </tr>
@@ -309,7 +278,7 @@ function MissingRecordsTable({
         </table>
         {filteredRecords.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
-            Aucun enregistrement manquant trouvé
+            Aucun enregistrement manquant trouvé pour ce départ
           </div>
         )}
       </div>
@@ -321,40 +290,71 @@ function MissingRecordsTable({
 function MissingRecordDetailModal({ 
   record, 
   isOpen, 
-  onClose, 
-  onInvestigate, 
-  onResolve, 
-  onIgnore,
-  onUpload 
+  onClose 
 }: { 
   record: MissingRecord | null;
   isOpen: boolean;
   onClose: () => void;
-  onInvestigate: (record: MissingRecord) => void;
-  onResolve: (record: MissingRecord) => void;
-  onIgnore: (record: MissingRecord) => void;
-  onUpload: (record: MissingRecord) => void;
 }) {
   if (!isOpen || !record) return null;
 
-  const getTypeLabel = (type: MissingType) => {
-    const labels = {
-      customer: "Client",
-      meter: "Compteur",
-      reading: "Relevé",
-      invoice: "Facture",
-      contract: "Contrat"
+  // Récupérer tous les champs de l'enregistrement BD1
+  const allFields = record.rawAnomaly.layer1Record 
+    ? Object.entries(record.rawAnomaly.layer1Record)
+        .filter(([key]) => key !== "m_rid")
+        .sort((a, b) => a[0].localeCompare(b[0]))
+    : [];
+
+  // Obtenir un libellé lisible pour un champ
+  const getFieldLabel = (key: string): string => {
+    const labels: Record<string, string> = {
+      name: "Nom",
+      code: "Code",
+      type: "Type",
+      voltage: "Tension (kV)",
+      active: "Actif",
+      created_date: "Date de création",
+      display_scada: "Affiché SCADA",
+      apparent_power: "Puissance (kVA)",
+      substation_id: "Poste source",
+      feeder_id: "Départ",
+      phase: "Phase",
+      localisation: "Localisation",
+      regime: "Régime",
+      section: "Section",
+      nature_conducteur: "Nature conducteur",
+      height: "Hauteur (m)",
+      latitude: "Latitude",
+      longitude: "Longitude",
+      w1_voltage: "Tension primaire",
+      w2_voltage: "Tension secondaire",
+      is_injection: "Injection",
+      local_name: "Nom local",
+      second_substation_id: "ID poste secondaire",
+      exploitation: "Exploitation",
+      zone_type: "Type de zone",
+      security_zone_id: "Zone de sécurité",
+      t1: "Terminal 1",
+      t2: "Terminal 2",
+      bay_mrid: "Travée",
+      nature: "Nature",
+      normal_open: "Normalement ouvert",
+      pole_mrid: "Poteau",
+      installation_date: "Date installation",
+      lastvisit_date: "Dernière visite",
+      pole_id: "Poteau",
+      is_derivation: "Dérivation",
     };
-    return labels[type];
+    return labels[key] || key;
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+      <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[95vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
-            <FileX className="h-5 w-5 text-destructive" />
-            Détails de l'enregistrement manquant
+            <FileX className="h-5 w-5 text-orange-600" />
+            Équipement à collecter
           </h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
             ✕
@@ -362,98 +362,90 @@ function MissingRecordDetailModal({
         </div>
 
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          {/* Informations générales */}
+          <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Code</label>
-              <p className="font-mono">{record.code}</p>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Type d'équipement
+              </label>
+              <p className="font-medium">{record.type}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Type</label>
-              <p>{getTypeLabel(record.type)}</p>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Description</label>
-            <p className="text-gray-700">{record.description}</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Sévérité</label>
-              <p className="capitalize">{record.severity}</p>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                ID technique
+              </label>
+              <p className="font-mono text-sm">{record.rawAnomaly.mrid}</p>
             </div>
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Statut</label>
-              <p className="capitalize">{record.status}</p>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                À collecter avant
+              </label>
+              <p className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {record.expectedDate}
+              </p>
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Date attendue</label>
-              <p>{record.expectedDate}</p>
-            </div>
-            {record.lastKnownDate && (
+            {record.rawAnomaly.feederName && (
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Dernière date connue</label>
-                <p>{record.lastKnownDate}</p>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Départ
+                </label>
+                <p>{record.rawAnomaly.feederName}</p>
               </div>
             )}
           </div>
 
+          {/* Localisation */}
+          {record.location && (
+            <div>
+              <label className="text-sm font-medium text-muted-foreground mb-1 block">
+                Localisation
+              </label>
+              <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
+                <MapPin className="h-4 w-4 text-blue-600" />
+                <span className="text-sm">{record.location}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Détails complets de l'équipement */}
           <div>
-            <label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-              <AlertCircle className="h-4 w-4" />
-              Impact
+            <label className="text-sm font-medium text-muted-foreground mb-2 block">
+              Caractéristiques techniques
             </label>
-            <p className="text-gray-700 mt-1">{record.impact}</p>
+            <div className="border rounded-lg overflow-hidden">
+              <div className="grid grid-cols-2 gap-2 p-4">
+                {allFields.map(([key, value]) => (
+                  <div key={key} className="border-b border-gray-100 py-2">
+                    <span className="text-xs text-muted-foreground block">
+                      {getFieldLabel(key)}
+                    </span>
+                    <span className="text-sm font-mono break-all">
+                      {formatValue(value)}
+                    </span>
+                  </div>
+                ))}
+                {allFields.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4 col-span-2">
+                    Aucun détail disponible
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Action suggérée</label>
-            <p className="text-gray-700 mt-1">{record.suggestedAction}</p>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Assigné à</label>
-            <p>{record.assignedTo || "Non assigné"}</p>
-          </div>
-
-          <div className="flex gap-2 pt-4 border-t">
-            {record.status === "pending" && (
-              <button
-                onClick={() => onInvestigate(record)}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-2"
-              >
-                <Clock className="h-4 w-4" />
-                Démarrer l'investigation
-              </button>
-            )}
-            {record.status === "investigating" && (
-              <>
-                <button
-                  onClick={() => onResolve(record)}
-                  className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 flex items-center gap-2"
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  Marquer comme résolu
-                </button>
-                <button
-                  onClick={() => onUpload(record)}
-                  className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 flex items-center gap-2"
-                >
-                  <Upload className="h-4 w-4" />
-                  Importer l'enregistrement
-                </button>
-              </>
-            )}
-            <button
-              onClick={() => onIgnore(record)}
-              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-            >
-              Ignorer
-            </button>
+          {/* Note d'information */}
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
+              <div className="text-sm text-amber-800">
+                <p className="font-medium">À collecter sur le terrain</p>
+                <p className="text-xs mt-1">
+                  Cet équipement est présent dans la base de référence mais n'a pas encore été collecté.
+                  Prévoyez sa collecte lors de la prochaine tournée terrain.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -478,12 +470,23 @@ export default function MissingRecordsPage() {
   const [selectedRecord, setSelectedRecord] = useState<MissingRecord | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
-  // Generate missing records for selected departure
+  // Récupérer les vraies données manquantes pour le départ sélectionné
   const missingRecords = useMemo(() => {
-    if (selectedDeparture) {
-      return generateMockMissingRecords(selectedDeparture.id, selectedDeparture.equipmentCount);
+    if (!selectedDeparture) return [];
+    
+    // Récupérer les anomalies de type "missing" pour ce départ
+    const anomalies = getAnomaliesByFeeder(selectedDeparture.feederId, "missing");
+    
+    // Convertir chaque anomalie en MissingRecord
+    const records: MissingRecord[] = [];
+    for (const anomaly of anomalies) {
+      const converted = convertAnomalyToMissing(anomaly);
+      if (converted) {
+        records.push(converted);
+      }
     }
-    return [];
+    
+    return records;
   }, [selectedDeparture]);
 
   // Filter missing records
@@ -493,32 +496,22 @@ export default function MissingRecordsPage() {
     return missingRecords.filter(
       (record) =>
         record.code.toLowerCase().includes(query) ||
+        record.type.toLowerCase().includes(query) ||
+        record.name.toLowerCase().includes(query) ||
         record.description.toLowerCase().includes(query)
     );
   }, [missingRecords, searchQuery]);
 
-  // Calculate global stats
+  // Calculer les stats globales
   const globalStats = useMemo(() => {
-    let total = 0;
-    let pending = 0;
-    let investigating = 0;
-    let resolved = 0;
-
-    eneoRegions.forEach((region) => {
-      const stats = getRegionStats(region.id);
-      total += stats.total;
-      pending += stats.pending;
-      investigating += stats.inProgress;
-      resolved += stats.completed;
-    });
-
-    return {
-      total,
-      pendingAndInProgress: pending + investigating,
-      completed: resolved,
-      completionRate: total > 0 ? Math.round((resolved / total) * 100) : 0,
-    };
-  }, []);
+  const stats = getGlobalMissingStats();
+  return {
+    total: stats.totalAttendu,
+    pendingAndInProgress: stats.manquantsRestants,
+    completed: stats.totalCollectes,
+    completionRate: stats.tauxProgression,
+  };
+}, []);
 
   // Build breadcrumb
   const breadcrumbItems: BreadcrumbItem[] = useMemo(() => {
@@ -577,28 +570,8 @@ export default function MissingRecordsPage() {
     setIsDetailModalOpen(true);
   };
 
-  const handleInvestigateRecord = (record: MissingRecord) => {
-    toast.success(`Investigation lancée pour ${record.code}`);
-    setIsDetailModalOpen(false);
-  };
-
-  const handleResolveRecord = (record: MissingRecord) => {
-    toast.success(`Enregistrement ${record.code} marqué comme résolu`);
-    setIsDetailModalOpen(false);
-  };
-
-  const handleIgnoreRecord = (record: MissingRecord) => {
-    toast.info(`Enregistrement ${record.code} ignoré`);
-    setIsDetailModalOpen(false);
-  };
-
-  const handleUploadRecord = (record: MissingRecord) => {
-    toast.info(`Import d'enregistrement pour ${record.code} - Fonctionnalité à venir`);
-    setIsDetailModalOpen(false);
-  };
-
   const handleBulkAction = (recordIds: string[], action: string) => {
-    toast.success(`${recordIds.length} enregistrement(s) ${action === "investigate" ? "en cours d'investigation" : "résolus"}`);
+    toast.success(`${recordIds.length} enregistrement(s) exporté(s) vers la liste de collecte`);
   };
 
   // Filter regions by search
@@ -613,7 +586,6 @@ export default function MissingRecordsPage() {
     );
   }, [searchQuery]);
 
-  // Filter zones by search
   const filteredZones = useMemo(() => {
     if (!selectedRegion) return [];
     if (!searchQuery) return selectedRegion.zones;
@@ -623,7 +595,6 @@ export default function MissingRecordsPage() {
     );
   }, [selectedRegion, searchQuery]);
 
-  // Filter departures by search
   const filteredDepartures = useMemo(() => {
     if (!selectedZone) return [];
     if (!searchQuery) return selectedZone.departures;
@@ -639,11 +610,11 @@ export default function MissingRecordsPage() {
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
-            <FileX className="h-7 w-7 text-destructive" />
+            <FileX className="h-7 w-7 text-orange-600" />
             Enregistrements Manquants
           </h1>
           <p className="text-muted-foreground mt-1">
-            Identification et traitement des enregistrements absents dans les systèmes
+            Équipements présents dans la base de référence mais non encore collectés sur le terrain
           </p>
         </div>
         <PeriodFilter value={period} onChange={setPeriod} />
@@ -676,117 +647,156 @@ export default function MissingRecordsPage() {
       </Card>
 
       {/* Content based on view level */}
-      {viewLevel === "regions" && (
-        <div>
-          <h2 className="text-xl font-semibold mb-4">Découpage Eneo ({filteredRegions.length})</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredRegions.map((region) => {
-              const stats = getRegionStats(region.id);
-              return (
-                <RegionCard
-                  key={region.id}
-                  code={region.code}
-                  name={region.name}
-                  fullName={region.fullName}
-                  stats={stats}
-                  zonesCount={region.zones.length}
-                  onClick={() => handleRegionClick(region)}
-                />
-              );
-            })}
-          </div>
-          {filteredRegions.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              Aucune region trouvée pour &quot;{searchQuery}&quot;
-            </div>
-          )}
-        </div>
-      )}
+{viewLevel === "regions" && (
+  <div>
+    <h2 className="text-xl font-semibold mb-4">Découpage Eneo ({filteredRegions.length})</h2>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {filteredRegions.map((region) => {
+        // Calculer les stats pour toute la région en sommant les stats des départs
+        let totalAttendu = 0;
+        let totalCollectes = 0;
+        let toatalCompleted = 0
+        
+        region.zones.forEach(zone => {
+          zone.departures.forEach(departure => {
+            if (departure.collectionStats) {
+              totalAttendu += departure.collectionStats.totalAttendu;
+              totalCollectes += departure.collectionStats.collectes;
+            toatalCompleted += departure.collectionStats.collectes;
+            }
+          });
+        });
+        
+        const manquantsRestants = totalAttendu - totalCollectes;
+        const tauxProgression = totalAttendu > 0 ? Math.round((totalCollectes / totalAttendu) * 100) : 0;
+        
+        const stats = {
+          total: totalAttendu,        // Nombre d'équipements restants à collecter
+          pending: 0,      // En attente de collecte
+          inProgress: manquantsRestants,      // Déjà collectés
+          completed: totalCollectes,                    // Résolus (pas applicable ici)
+          tauxProgression: tauxProgression // Pourcentage de progression
+        };
+        
+        return (
+          <RegionCard
+            key={region.id}
+            code={region.code}
+            name={region.name}
+            fullName={region.fullName}
+            stats={stats}
+            zonesCount={region.zones.length}
+            onClick={() => handleRegionClick(region)}
+          />
+        );
+      })}
+    </div>
+    {filteredRegions.length === 0 && (
+      <div className="text-center py-12 text-muted-foreground">
+        Aucune region trouvée pour &quot;{searchQuery}&quot;
+      </div>
+    )}
+  </div>
+)}
 
-      {viewLevel === "zones" && selectedRegion && (
-        <div>
-          <h2 className="text-xl font-semibold mb-4">
-            Zones de {selectedRegion.fullName} ({filteredZones.length})
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredZones.map((zone) => {
-              const stats = getZoneStats(zone.id);
-              return (
-                <ZoneCard
-                  key={zone.id}
-                  code={zone.code}
-                  name={zone.name}
-                  stats={stats}
-                  departuresCount={zone.departures.length}
-                  onClick={() => handleZoneClick(zone)}
-                />
-              );
-            })}
-          </div>
-          {filteredZones.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              Aucune zone trouvée pour &quot;{searchQuery}&quot;
-            </div>
-          )}
-        </div>
-      )}
+{viewLevel === "zones" && selectedRegion && (
+  <div>
+    <h2 className="text-xl font-semibold mb-4">
+      Zones de {selectedRegion.fullName} ({filteredZones.length})
+    </h2>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {filteredZones.map((zone) => {
+        // Calculer les stats pour la zone en sommant les stats des départs
+        let totalAttendu = 0;
+        let totalCollectes = 0;
+        let toatalCompleted = 0
+        
+        zone.departures.forEach(departure => {
+          if (departure.collectionStats) {
+            totalAttendu += departure.collectionStats.totalAttendu;
+            totalCollectes += departure.collectionStats.collectes;
+            toatalCompleted += departure.collectionStats.collectes;
+          }
+        });
+        
+        const manquantsRestants = totalAttendu - totalCollectes;
+        const tauxProgression = totalAttendu > 0 ? Math.round((totalCollectes / totalAttendu) * 100) : 0;
+        
+        const stats = {
+          total: totalAttendu,        // Nombre d'équipements restants à collecter dans la zone
+          pending: 0,      // En attente de collecte
+          inProgress:  manquantsRestants,      // Déjà collectés
+          completed: totalCollectes,                    // Résolus (pas applicable ici)
+          tauxProgression: tauxProgression // Pourcentage de progression
+        };
+        
+        return (
+          <ZoneCard
+            key={zone.id}
+            code={zone.code}
+            name={zone.name}
+            stats={stats}
+            departuresCount={zone.departures.length}
+            onClick={() => handleZoneClick(zone)}
+          />
+        );
+      })}
+    </div>
+    {filteredZones.length === 0 && (
+      <div className="text-center py-12 text-muted-foreground">
+        Aucune zone trouvée pour &quot;{searchQuery}&quot;
+      </div>
+    )}
+  </div>
+)}
 
-      {viewLevel === "departures" && selectedZone && (
-        <div>
-          <h2 className="text-xl font-semibold mb-4">
-            Departs de {selectedZone.name} ({filteredDepartures.length})
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredDepartures.map((departure) => {
-              const completed = Math.floor(departure.equipmentCount * 0.6);
-              const pending = departure.equipmentCount - completed;
-              return (
-                <DepartureCard
-                  key={departure.id}
-                  code={departure.code}
-                  name={departure.name}
-                  equipmentCount={departure.equipmentCount}
-                  completedCount={completed}
-                  pendingCount={pending}
-                  onClick={() => handleDepartureClick(departure)}
-                />
-              );
-            })}
-          </div>
-          {filteredDepartures.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              Aucun depart trouvé pour &quot;{searchQuery}&quot;
-            </div>
-          )}
-        </div>
-      )}
+{viewLevel === "departures" && selectedZone && (
+  <div>
+    <h2 className="text-xl font-semibold mb-4">
+      Départs de {selectedZone.name} ({filteredDepartures.length})
+    </h2>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {filteredDepartures.map((departure) => {
+        const stats = departure.collectionStats;
+        return (
+          <DepartureCard
+            key={departure.id}
+            code={departure.code}
+            name={departure.name}
+            equipmentCount={stats?.totalAttendu || 0}
+            completedCount={stats?.collectes || 0}
+            pendingCount={stats?.manquantsRestants || 0}
+            onClick={() => handleDepartureClick(departure)}
+          />
+        );
+      })}
+    </div>
+  </div>
+)}
 
       {viewLevel === "missing" && selectedDeparture && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">
-              Enregistrements manquants du depart {selectedDeparture.code} ({filteredRecords.length})
+              Équipements à collecter - {selectedDeparture.code} ({filteredRecords.length})
             </h2>
           </div>
           
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <FileX className="h-5 w-5" />
-                Liste des enregistrements manquants
+                <FileX className="h-5 w-5 text-orange-600" />
+                Liste des équipements manquants
               </CardTitle>
               <CardDescription>
-                Gérez les enregistrements absents détectés pour le depart {selectedDeparture.name}
+                Ces équipements sont présents dans la base de référence mais n'ont pas encore été collectés.
+                Prévoyez leur collecte lors de la prochaine tournée terrain.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <MissingRecordsTable
                 records={filteredRecords}
                 onView={handleViewRecord}
-                onInvestigate={handleInvestigateRecord}
-                onResolve={handleResolveRecord}
-                onIgnore={handleIgnoreRecord}
-                onUpload={handleUploadRecord}
                 onBulkAction={handleBulkAction}
               />
             </CardContent>
@@ -799,10 +809,6 @@ export default function MissingRecordsPage() {
         record={selectedRecord}
         isOpen={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
-        onInvestigate={handleInvestigateRecord}
-        onResolve={handleResolveRecord}
-        onIgnore={handleIgnoreRecord}
-        onUpload={handleUploadRecord}
       />
     </div>
   );

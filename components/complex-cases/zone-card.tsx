@@ -15,6 +15,7 @@ interface ZoneCardProps {
 }
 
 export function ZoneCard({ code, name, stats, departuresCount, onClick }: ZoneCardProps) {
+   const completionRate = (stats.completed/stats.total)*100;
   return (
     <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={onClick}>
       <CardHeader className="pb-2">
@@ -52,10 +53,10 @@ export function ZoneCard({ code, name, stats, departuresCount, onClick }: ZoneCa
 
         {/* Progress */}
         <div className="space-y-1">
-          <Progress value={stats.completionRate} className="h-1.5" />
+          <Progress value={completionRate} className="h-1.5" />
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>{departuresCount} depart(s)</span>
-            <span>{stats.completionRate}%</span>
+            <span>{completionRate.toFixed(1)}%</span>
           </div>
         </div>
       </CardContent>

@@ -494,6 +494,33 @@ function DuplicateDetailModal({
           </button>
         </div>
 
+                  {/* Actions */}
+          <div className="flex flex-wrap gap-3 py-2 border-t">
+            <button
+              onClick={handleMerge}
+              className={`px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium transition-colors ${
+                   "bg-green-600 text-white hover:bg-green-700"
+              }`}
+            >
+              <GitMerge className="h-4 w-4" />
+              Fusionner (garder sélectionné)
+            </button>
+            <button
+              onClick={handleKeepBoth}
+              className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium"
+            >
+              <Copy className="h-4 w-4" />
+              Conserver les deux
+            </button>
+            <button
+              onClick={() => onDiscard(duplicate)}
+              className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 font-medium"
+            >
+              <XCircle className="h-4 w-4" />
+              Rejeter les deux
+            </button>
+          </div>
+
         <div className="space-y-3">
           {/* Informations générales */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
@@ -598,36 +625,7 @@ function DuplicateDetailModal({
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex flex-wrap gap-3 pt-4 border-t">
-            <button
-              onClick={handleMerge}
-              className={`px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium transition-colors ${
-                   "bg-green-600 text-white hover:bg-green-700"
-              }`}
-            >
-              <GitMerge className="h-4 w-4" />
-              Fusionner (garder sélectionné)
-            </button>
-            <button
-              onClick={handleKeepBoth}
-              className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium"
-            >
-              <Copy className="h-4 w-4" />
-              Conserver les deux
-            </button>
-            <button
-              onClick={() => onDiscard(duplicate)}
-              className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 font-medium"
-            >
-              <XCircle className="h-4 w-4" />
-              Rejeter les deux
-            </button>
-          </div>
-          <p className="text-xs text-muted-foreground text-center">
-            La fusion supprimera l'enregistrement non sélectionné de la base de collecte terrain.
-            {!selectedRecordId && " Sélectionnez l'enregistrement à conserver pour activer la fusion."}
-          </p>
+
         </div>
       </div>
     </div>

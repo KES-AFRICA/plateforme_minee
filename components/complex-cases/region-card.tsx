@@ -16,6 +16,9 @@ interface RegionCardProps {
 }
 
 export function RegionCard({ code, name, fullName, stats, zonesCount, onClick }: RegionCardProps) {
+
+  const completionRate = (stats.completed/stats.total)*100;
+
   return (
     <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={onClick}>
       <CardHeader className="pb-2">
@@ -55,9 +58,9 @@ export function RegionCard({ code, name, fullName, stats, zonesCount, onClick }:
         <div className="space-y-1">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Progression</span>
-            <span className="font-medium">{stats.completionRate}%</span>
+            <span className="font-medium">{completionRate.toFixed(1)}%</span>
           </div>
-          <Progress value={stats.completionRate} className="h-2" />
+          <Progress value={completionRate} className="h-2" />
         </div>
 
         {/* Zones count */}
