@@ -15,6 +15,7 @@ import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { LanguageSwitch } from "@/components/shared/language-switch";
 import { NotificationDropdown } from "@/components/shared/notification-dropdown";
 import { usePathname } from "next/navigation";
+import React from "react";
 
 // Structure hiérarchique des pages
 const routeConfig: Record<string, { label: string; href: string; parent?: string }> = {
@@ -86,14 +87,16 @@ export function AppHeader() {
           <BreadcrumbList>
             {breadcrumbItems.length > 0 ? (
               breadcrumbItems.map((item, index) => (
-                <BreadcrumbItem key={item.href}>
-                  {index === breadcrumbItems.length - 1 ? (
-                    <BreadcrumbPage>{item.label}</BreadcrumbPage>
-                  ) : (
-                    <BreadcrumbLink href={item.href}>{item.label}</BreadcrumbLink>
-                  )}
+                <React.Fragment key={item.href}>
+                  <BreadcrumbItem>
+                    {index === breadcrumbItems.length - 1 ? (
+                      <BreadcrumbPage>{item.label}</BreadcrumbPage>
+                    ) : (
+                      <BreadcrumbLink href={item.href}>{item.label}</BreadcrumbLink>
+                    )}
+                  </BreadcrumbItem>
                   {index < breadcrumbItems.length - 1 && <BreadcrumbSeparator />}
-                </BreadcrumbItem>
+                </React.Fragment>
               ))
             ) : (
               <BreadcrumbItem>

@@ -1,41 +1,244 @@
+// components/notifications/notification-detail-view.tsx
 "use client";
 
-import { Notification } from "@/lib/api/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Progress } from "@/components/ui/progress";
 import {
   Bell,
   CheckCircle,
   AlertCircle,
   MessageCircle,
   Archive,
+  User,
+  MapPin,
+  Calendar,
+  GitCompare,
+  Copy,
+  FilePlus,
+  FileX,
+  Clock,
+  Check,
+  X,
+  MoreHorizontal,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
+import { NotificationDetail } from "@/lib/api/notification-details-data";
 
 interface NotificationDetailViewProps {
-  notification: Notification;
+  notification: NotificationDetail;
   onMarkAsRead: (id: string) => void;
   onDelete: (id: string) => void;
   language: string;
 }
 
-const typeIcons: Record<Notification["type"], React.ReactNode> = {
-  new_task: <Bell className="h-6 w-6 text-blue-500" />,
-  task_validated: <CheckCircle className="h-6 w-6 text-green-500" />,
-  task_rejected: <AlertCircle className="h-6 w-6 text-red-500" />,
-  comment: <MessageCircle className="h-6 w-6 text-orange-500" />,
-  system: <AlertCircle className="h-6 w-6 text-gray-500" />,
+const typeIcons: Record<NotificationDetail["type"], React.ReactNode> = {
+  duplicate_task: <Copy className="h-5 w-5 text-amber-500" />,
+  difference_task: <GitCompare className="h-5 w-5 text-blue-500" />,
+  new_kobo_task: <FilePlus className="h-5 w-5 text-green-500" />,
+  missing_eneo_task: <FileX className="h-5 w-5 text-orange-500" />,
+  task_validated: <CheckCircle className="h-5 w-5 text-emerald-500" />,
+  task_rejected: <X className="h-5 w-5 text-red-500" />,
+  comment: <MessageCircle className="h-5 w-5 text-sky-500" />,
+  system: <Bell className="h-5 w-5 text-gray-500" />,
 };
 
-const typeLabels: Record<Notification["type"], { fr: string; en: string }> = {
-  new_task: { fr: "Nouvelle tâche", en: "New task" },
-  task_validated: { fr: "Tâche validée", en: "Task validated" },
-  task_rejected: { fr: "Tâche rejetée", en: "Task rejected" },
-  comment: { fr: "Commentaire", en: "Comment" },
-  system: { fr: "Système", en: "System" },
+const typeColors: Record<NotificationDetail["type"], string> = {
+  duplicate_task: "bg-amber-50 text-amber-700 border-amber-200",
+  difference_task: "bg-blue-50 text-blue-700 border-blue-200",
+  new_kobo_task: "bg-green-50 text-green-700 border-green-200",
+  missing_eneo_task: "bg-orange-50 text-orange-700 border-orange-200",
+  task_validated: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  task_rejected: "bg-red-50 text-red-700 border-red-200",
+  comment: "bg-sky-50 text-sky-700 border-sky-200",
+  system: "bg-gray-50 text-gray-700 border-gray-200",
+};
+
+const priorityColors: Record<"low" | "medium" | "high" | "critical", string> = {
+  low: "bg-slate-100 text-slate-700",
+  medium: "bg-blue-100 text-blue-700",
+  high: "bg-amber-100 text-amber-700",
+  critical: "bg-red-100 text-red-700",
+};
+
+// Helper pour formater les valeurs
+const formatValue = (value: unknown): string => {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") return value ? "Oui" : "Non";
+  if (value instanceof Date) return value.toLocaleString();
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+};
+
+const getFieldLabel = (key: string): string => {
+  const labels: Record<string, string> = {
+    name: "Nom",
+    code: "Code",
+    type: "Type",
+    voltage: "Tension (kV)",
+    active: "Actif",
+    created_date: "Date de création",
+    apparent_power: "Puissance (kVA)",
+    substation_id: "Poste source",
+    feeder_id: "Départ",
+    phase: "Phase",
+    localisation: "Localisation",
+    regime: "Régime",
+    section: "Section",
+    nature_conducteur: "Nature conducteur",
+    height: "Hauteur (m)",
+    latitude: "Latitude",
+    longitude: "Longitude",
+    w1_voltage: "Tension primaire",
+    w2_voltage: "Tension secondaire",
+    is_injection: "Injection",
+    local_name: "Nom local",
+    zone_type: "Type de zone",
+    security_zone_id: "Zone de sécurité",
+    t1: "Terminal 1",
+    t2: "Terminal 2",
+    bay_mrid: "Travée",
+    nature: "Nature",
+    normal_open: "Normalement ouvert",
+    pole_mrid: "Poteau",
+    installation_date: "Date installation",
+    lastvisit_date: "Dernière visite",
+    pole_id: "Poteau",
+    is_derivation: "Dérivation",
+    duplicateCount: "Nombre de doublons",
+    affectedRegion: "Région concernée",
+    createdBy: "Créé par",
+    fieldCount: "Nombre de champs",
+    source: "Source",
+    recordCount: "Nombre d'enregistrements",
+    location: "Localisation",
+    missingCount: "Nombre manquant",
+    validatedBy: "Validé par",
+    comment: "Commentaire",
+    reviewedBy: "Revu par",
+    rejectionReason: "Motif du rejet",
+    version: "Version",
+    changelog: "Changements",
+    week: "Semaine",
+    resolved: "Résolus",
+    rate: "Taux",
+  };
+  return labels[key] || key.replace(/([A-Z])/g, " $1").trim();
+};
+
+// Composant pour afficher les détails d'un équipement
+const EquipmentDetails = ({ equipment }: { equipment: NotificationDetail["sourceEquipment"] }) => {
+  if (!equipment) return null;
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      <div className="bg-muted/30 px-4 py-2 font-medium flex items-center gap-2">
+        <MapPin className="h-4 w-4 text-muted-foreground" />
+        {equipment.name} ({equipment.code})
+      </div>
+      <div className="grid grid-cols-2 gap-2 p-4 text-sm">
+        <div>
+          <span className="text-muted-foreground text-xs block">Type</span>
+          <span className="font-medium">{equipment.type}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground text-xs block">Départ</span>
+          <span className="font-medium">{equipment.departure}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground text-xs block">Puissance</span>
+          <span className="font-medium">{equipment.power || "—"}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground text-xs block">Tension</span>
+          <span className="font-medium">{equipment.tension || "—"}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground text-xs block">Localisation</span>
+          <span className="font-medium">{equipment.location || equipment.localisation || "—"}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground text-xs block">Statut</span>
+          <Badge variant="outline" className="text-xs">
+            {equipment.status === "active" ? "Actif" : equipment.status === "inactive" ? "Inactif" : "Maintenance"}
+          </Badge>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Composant pour afficher la table des divergences
+const DifferencesTable = ({ differences }: { differences: NotificationDetail["differences"] }) => {
+  if (!differences || differences.length === 0) return null;
+  return (
+    <div>
+      <h4 className="font-medium mb-2 flex items-center gap-2">
+        <GitCompare className="h-4 w-4" />
+        Champs divergents
+      </h4>
+      <div className="border rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="p-2 text-left">Champ</th>
+              <th className="p-2 text-left">Kobo (source)</th>
+              <th className="p-2 text-left">Eneo (cible)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {differences.map((diff, idx) => (
+              <tr key={idx} className="border-t">
+                <td className="p-2 font-medium">{getFieldLabel(diff.field)}</td>
+                <td className="p-2 text-muted-foreground">{diff.sourceValue}</td>
+                <td className="p-2 text-muted-foreground">{diff.targetValue}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+// Composant pour afficher la barre de similarité
+const SimilarityProgress = ({ value }: { value?: number }) => {
+  if (value === undefined) return null;
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-sm">
+        <span>Similarité</span>
+        <span className="font-mono">{value}%</span>
+      </div>
+      <Progress value={value} className="h-2" />
+    </div>
+  );
+};
+
+// Composant pour afficher les métadonnées
+const MetadataBlock = ({ metadata }: { metadata?: Record<string, unknown> }) => {
+  if (!metadata) return null;
+  const entries = Object.entries(metadata).filter(([k]) => !["createdBy", "comment"].includes(k));
+  if (entries.length === 0) return null;
+  return (
+    <div>
+      <h4 className="font-medium mb-2 flex items-center gap-2">
+        <MoreHorizontal className="h-4 w-4" />
+        Informations complémentaires
+      </h4>
+      <div className="grid grid-cols-2 gap-2 text-sm bg-muted/20 p-3 rounded-lg">
+        {entries.map(([key, value]) => (
+          <div key={key}>
+            <span className="text-muted-foreground text-xs block">{getFieldLabel(key)}</span>
+            <span className="font-medium">{formatValue(value)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 export function NotificationDetailView({
@@ -44,111 +247,181 @@ export function NotificationDetailView({
   onDelete,
   language,
 }: NotificationDetailViewProps) {
-  const fullDate = new Intl.DateTimeFormat(
-    language === "fr" ? "fr-FR" : "en-US",
-    {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }
-  ).format(new Date(notification.createdAt));
+  const fullDate = new Intl.DateTimeFormat(language === "fr" ? "fr-FR" : "en-US", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(notification.timestamp);
 
-  const timeAgo = formatDistanceToNow(new Date(notification.createdAt), {
+  const timeAgo = formatDistanceToNow(notification.timestamp, {
     addSuffix: true,
     locale: language === "fr" ? fr : enUS,
   });
 
-  const typeLabel =
-    typeLabels[notification.type][language === "fr" ? "fr" : "en"];
+  const typeLabel = {
+    duplicate_task: "Doublon",
+    difference_task: "Divergence",
+    new_kobo_task: "Nouvelle donnée",
+    missing_eneo_task: "Donnée manquante",
+    task_validated: "Validé",
+    task_rejected: "Rejeté",
+    comment: "Commentaire",
+    system: "Système",
+  }[notification.type];
+
+  const getMetadataNumber = (key: string): number | undefined => {
+    const val = notification.metadata?.[key];
+    return typeof val === "number" ? val : undefined;
+  };
+
+  const recordCount = getMetadataNumber("recordCount");
+  const missingCount = getMetadataNumber("missingCount");
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <div className="sticky top-0 z-20 space-y-4 border-b bg-card p-6 shadow-sm">
-        <div className="flex items-start justify-between">
-          <div className="flex items-start gap-4">
-            <div className="mt-1">{typeIcons[notification.type]}</div>
+    <div className="h-full flex flex-col overflow-hidden bg-background">
+      {/* Header avec actions */}
+      <div className="sticky top-0 z-20 border-b bg-card/95 backdrop-blur p-5 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-1 p-2 rounded-full bg-primary/10">{typeIcons[notification.type]}</div>
             <div className="flex-1">
-              <h1 className="text-xl font-bold text-foreground">
-                {notification.title}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {fullDate}
-              </p>
+              <h1 className="text-xl font-semibold tracking-tight">{notification.title}</h1>
+              <div className="flex items-center gap-3 mt-1">
+                <Badge className={typeColors[notification.type]}>{typeLabel}</Badge>
+                <Badge className={priorityColors[notification.priority]}>
+                  {notification.priority === "critical" ? "Critique" : 
+                   notification.priority === "high" ? "Élevée" :
+                   notification.priority === "medium" ? "Moyenne" : "Basse"}
+                </Badge>
+              </div>
             </div>
           </div>
-          <Badge
-            variant="outline"
-            className={
-              notification.type === "task_rejected"
-                ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/30 dark:bg-red-950/30"
-                : notification.type === "task_validated"
-                  ? "border-green-200 bg-green-50 text-green-700 dark:border-green-900/30 dark:bg-green-950/30"
-                  : ""
-            }
-          >
-            {typeLabel}
-          </Badge>
+          <div className="flex gap-2">
+            {!notification.isRead && (
+              <Button size="sm" variant="outline" onClick={() => onMarkAsRead(notification.id)} className="gap-1.5">
+                <Check className="h-4 w-4" />
+                {language === "fr" ? "Marquer comme lu" : "Mark as read"}
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={() => onDelete(notification.id)} className="gap-1.5 text-muted-foreground">
+              <Archive className="h-4 w-4" />
+              {language === "fr" ? "Archiver" : "Archive"}
+            </Button>
+          </div>
         </div>
 
-        <Separator />
-
-        <div className="flex gap-2">
-          {!notification.isRead && (
-            <Button
-              size="sm"
-              variant="default"
-              onClick={() => onMarkAsRead(notification.id)}
-              className="gap-2"
-            >
-              <CheckCircle className="h-4 w-4" />
-              {language === "fr" ? "Marquer comme lu" : "Mark as read"}
-            </Button>
+        {/* Métadonnées rapides */}
+        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+          <div className="flex items-center gap-1">
+            <Calendar className="h-3.5 w-3.5" />
+            <span>{fullDate}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Clock className="h-3.5 w-3.5" />
+            <span>{timeAgo}</span>
+          </div>
+          {notification.assignedTo && (
+            <div className="flex items-center gap-1">
+              <User className="h-3.5 w-3.5" />
+              <span>Assigné à <span className="font-medium text-foreground">{notification.assignedTo}</span></span>
+            </div>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onDelete(notification.id)}
-            className="gap-2"
-          >
-            <Archive className="h-4 w-4" />
-            {language === "fr" ? "Archiver" : "Archive"}
-          </Button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6 space-y-6">
-          <Card className="p-4 bg-muted/30 border-0">
-            <p className="text-sm leading-relaxed text-foreground">
-              {notification.message}
-            </p>
-          </Card>
+      {/* Contenu principal */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-6">
+        {/* Description */}
+        <Card className="p-4 bg-muted/30 border-0">
+          <p className="text-sm leading-relaxed">{notification.description}</p>
+        </Card>
 
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-muted-foreground text-xs">
-                {language === "fr" ? "Reçu" : "Received"}
-              </p>
-              <p className="font-medium mt-1">{timeAgo}</p>
+        {/* Doublons */}
+        {notification.type === "duplicate_task" && notification.sourceEquipment && notification.targetEquipment && (
+          <div className="space-y-3">
+            <h3 className="font-medium">Enregistrements en double</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <EquipmentDetails equipment={notification.sourceEquipment} />
+              <EquipmentDetails equipment={notification.targetEquipment} />
             </div>
-            <div>
-              <p className="text-muted-foreground text-xs">
-                {language === "fr" ? "Type" : "Type"}
-              </p>
-              <p className="font-medium mt-1">{typeLabel}</p>
+            <SimilarityProgress value={notification.similarity} />
+          </div>
+        )}
+
+        {/* Divergences */}
+        {notification.type === "difference_task" && notification.sourceEquipment && (
+          <div className="space-y-3">
+            <h3 className="font-medium">Équipement concerné</h3>
+            <EquipmentDetails equipment={notification.sourceEquipment} />
+            <DifferencesTable differences={notification.differences} />
+            {notification.similarity !== undefined && (
+              <SimilarityProgress value={notification.similarity} />
+            )}
+          </div>
+        )}
+
+        {/* Nouvelles données */}
+        {notification.type === "new_kobo_task" && notification.sourceEquipment && (
+          <div className="space-y-3">
+            <h3 className="font-medium">Nouvel équipement détecté</h3>
+            <EquipmentDetails equipment={notification.sourceEquipment} />
+            {recordCount && (
+              <div className="text-sm text-muted-foreground bg-muted/20 p-3 rounded-lg">
+                <span className="font-medium">{recordCount}</span> enregistrement(s) dans ce lot
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Données manquantes */}
+        {notification.type === "missing_eneo_task" && notification.sourceEquipment && (
+          <div className="space-y-3">
+            <h3 className="font-medium">Équipement à collecter</h3>
+            <EquipmentDetails equipment={notification.sourceEquipment} />
+            {missingCount && (
+              <div className="text-sm text-muted-foreground bg-muted/20 p-3 rounded-lg">
+                <span className="font-medium">{missingCount}</span> équipement(s) manquant(s) dans cette zone
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Validation / rejet */}
+        {(notification.type === "task_validated" || notification.type === "task_rejected") && notification.metadata && (
+          <div className="space-y-3">
+            <h3 className="font-medium">Détails de la décision</h3>
+            <div className="bg-muted/20 p-4 rounded-lg space-y-2">
+              <div className="flex items-center gap-2">
+                {notification.type === "task_validated" ? <CheckCircle className="h-4 w-4 text-green-500" /> : <X className="h-4 w-4 text-red-500" />}
+                <span className="font-medium">
+                  {formatValue(notification.metadata.validatedBy || notification.metadata.reviewedBy || "Système")}
+                </span>
+              </div>
+              {!!notification.metadata?.comment && (
+                <p className="text-sm text-muted-foreground">« {formatValue(notification.metadata.comment)} »</p>
+              )}
+              {!!notification.metadata?.rejectionReason && (
+                <p className="text-sm text-muted-foreground">Motif : {formatValue(notification.metadata.rejectionReason)}</p>
+              )}
             </div>
           </div>
+        )}
 
-          <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-            <p className="text-xs text-muted-foreground">
-              {language === "fr"
-                ? "Consultez votre tableau de bord pour agir sur cette notification"
-                : "Check your dashboard to take action on this notification"}
-            </p>
+        {/* Métadonnées supplémentaires */}
+        <MetadataBlock metadata={notification.metadata} />
+
+        {/* Lien d'action */}
+        {notification.action && (
+          <div className="pt-2">
+            <Button asChild className="w-full sm:w-auto">
+              <a href={notification.action.url} target="_blank" rel="noopener noreferrer">
+                {notification.action.label}
+              </a>
+            </Button>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

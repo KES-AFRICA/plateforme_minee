@@ -1,15 +1,15 @@
 "use client";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Notification } from "@/lib/api/types";
+import { NotificationDetail } from "@/lib/api/notification-details-data";
 import { formatDistanceToNow } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
 interface NotificationListItemProps {
-  notification: Notification;
+  notification: NotificationDetail;
   isSelected: boolean;
-  onClick: (notification: Notification) => void;
+  onClick: (notification: NotificationDetail) => void;
   language: string;
 }
 
@@ -28,7 +28,7 @@ export function NotificationListItem({
   onClick,
   language,
 }: NotificationListItemProps) {
-  const timeAgo = formatDistanceToNow(new Date(notification.createdAt), {
+  const timeAgo = formatDistanceToNow(notification.timestamp, {
     addSuffix: false,
     locale: language === "fr" ? fr : enUS,
   });
@@ -69,7 +69,7 @@ export function NotificationListItem({
           </span>
         </div>
         <p className="text-xs text-muted-foreground truncate line-clamp-1">
-          {notification.message}
+          {notification.description}
         </p>
       </div>
 

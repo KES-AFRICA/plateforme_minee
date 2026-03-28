@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { PeriodFilter, TimePeriod } from "@/components/notifications/period-filter";
 import { NotificationDetailView } from "@/components/notifications/notification-detail-view";
 import { NotificationGroup } from "@/components/notifications/notification-group";
-import { Notification } from "@/lib/api/types";
+import { NotificationDetail, getAllNotifications } from "@/lib/api/notification-details-data";
 import { Search, Bell, Check } from "lucide-react";
 import {
   isToday,
@@ -16,8 +16,6 @@ import {
   isThisWeek,
   isThisMonth,
 } from "date-fns";
-import { fr, enUS } from "date-fns/locale";
-import { mockNotifications } from "@/lib/api/mock-data";
 
 const getDateGroup = (date: Date, language: string): string => {
   if (isToday(date)) return language === "fr" ? "Aujourd'hui" : "Today";
@@ -27,46 +25,37 @@ const getDateGroup = (date: Date, language: string): string => {
   return language === "fr" ? "Plus ancien" : "Older";
 };
 
-// Modifier pour supporter "all"
 const getTimePeriodMs = (period: TimePeriod): number => {
   switch (period) {
-    case "24h":
-      return 24 * 60 * 60 * 1000;
-    case "7d":
-      return 7 * 24 * 60 * 60 * 1000;
-    case "30d":
-      return 30 * 24 * 60 * 60 * 1000;
-    case "all":
-      return Infinity;
+    case "24h": return 24 * 60 * 60 * 1000;
+    case "7d":  return 7 * 24 * 60 * 60 * 1000;
+    case "30d": return 30 * 24 * 60 * 60 * 1000;
+    case "all": return Infinity;
+    default:    return Infinity;
   }
 };
 
 export default function NotificationsPage() {
   const { language } = useI18n();
   
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
+  const [notifications, setNotifications] = useState<NotificationDetail[]>([]);
+  const [selectedNotification, setSelectedNotification] = useState<NotificationDetail | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [timePeriod, setTimePeriod] = useState<TimePeriod>("all"); // ← Changé à "all"
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>("all");
   const [leftWidth, setLeftWidth] = useState(35);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (mockNotifications && mockNotifications.length > 0) {
-      setNotifications(mockNotifications);
-      setSelectedNotification(mockNotifications[0]);
-    }
+    const allNotifications = getAllNotifications();
+    setNotifications(allNotifications);
+    setSelectedNotification(allNotifications[0] || null);
     setIsLoading(false);
   }, []);
 
-  // Modifier le filtre pour gérer "all"
   const periodFiltered = useMemo(() => {
     if (timePeriod === "all") return notifications;
-    const periodMs = getTimePeriodMs(timePeriod);
-    const cutoffTime = Date.now() - periodMs;
-    return notifications.filter(
-      (n) => new Date(n.createdAt).getTime() > cutoffTime
-    );
+    const cutoff = Date.now() - getTimePeriodMs(timePeriod);
+    return notifications.filter((n) => n.timestamp.getTime() > cutoff);
   }, [notifications, timePeriod]);
 
   const filtered = useMemo(() => {
@@ -75,21 +64,21 @@ export default function NotificationsPage() {
     return periodFiltered.filter(
       (n) =>
         n.title.toLowerCase().includes(query) ||
-        n.message.toLowerCase().includes(query)
+        n.description.toLowerCase().includes(query)
     );
   }, [periodFiltered, searchQuery]);
 
   const grouped = useMemo(() => {
-    const groups: Record<string, Notification[]> = {};
+    const groups: Record<string, NotificationDetail[]> = {};
     filtered.forEach((n) => {
-      const dateGroup = getDateGroup(new Date(n.createdAt), language);
-      if (!groups[dateGroup]) groups[dateGroup] = [];
-      groups[dateGroup].push(n);
+      const group = getDateGroup(n.timestamp, language);
+      if (!groups[group]) groups[group] = [];
+      groups[group].push(n);
     });
     return groups;
   }, [filtered, language]);
 
-  const handleSelectNotification = (notification: Notification) => {
+  const handleSelectNotification = (notification: NotificationDetail) => {
     setSelectedNotification(notification);
     if (!notification.isRead) {
       setNotifications((prev) =>
@@ -104,19 +93,25 @@ export default function NotificationsPage() {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
     );
+    if (selectedNotification?.id === id) {
+      setSelectedNotification({ ...selectedNotification, isRead: true });
+    }
   };
 
   const handleMarkAllAsRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    if (selectedNotification) {
+      setSelectedNotification({ ...selectedNotification, isRead: true });
+    }
   };
 
   const handleDelete = (id: string) => {
     setNotifications((prev) => {
-      const newNotifications = prev.filter((n) => n.id !== id);
+      const newList = prev.filter((n) => n.id !== id);
       if (selectedNotification?.id === id) {
-        setSelectedNotification(newNotifications[0] || null);
+        setSelectedNotification(newList[0] || null);
       }
-      return newNotifications;
+      return newList;
     });
   };
 
@@ -125,7 +120,7 @@ export default function NotificationsPage() {
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
   }
@@ -137,33 +132,22 @@ export default function NotificationsPage() {
         <div className="flex items-center gap-3">
           <Bell className="h-6 w-6 text-primary" />
           <div>
-            <h1 className="font-semibold text-foreground">
-              {language === "fr" ? "Notifications" : "Notifications"}
-            </h1>
+            <h1 className="font-semibold text-foreground">Notifications</h1>
             <p className="text-xs text-muted-foreground">
               {unreadCount > 0
                 ? language === "fr"
                   ? `${unreadCount} non lue(s)`
                   : `${unreadCount} unread`
                 : language === "fr"
-                  ? "Aucune nouvelle"
-                  : "All caught up"}
+                ? "Aucune nouvelle"
+                : "All caught up"}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <PeriodFilter
-            selected={timePeriod}
-            onSelectPeriod={setTimePeriod}
-            language={language}
-          />
+          <PeriodFilter selected={timePeriod} onSelectPeriod={setTimePeriod} language={language} />
           {unreadCount > 0 && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleMarkAllAsRead}
-              className="gap-1.5"
-            >
+            <Button size="sm" variant="outline" onClick={handleMarkAllAsRead} className="gap-1.5">
               <Check className="h-4 w-4" />
               <span className="hidden sm:inline text-xs">
                 {language === "fr" ? "Tout lire" : "Mark all"}
@@ -176,11 +160,7 @@ export default function NotificationsPage() {
       {/* Main content */}
       <div className="flex-1 flex gap-0 overflow-hidden">
         {/* Left panel - List */}
-        <div
-          className="flex flex-col border-r overflow-hidden transition-all"
-          style={{ width: `${leftWidth}%` }}
-        >
-          {/* Search */}
+        <div className="flex flex-col border-r overflow-hidden transition-all" style={{ width: `${leftWidth}%` }}>
           <div className="border-b p-3 flex-shrink-0">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -192,17 +172,11 @@ export default function NotificationsPage() {
               />
             </div>
           </div>
-
-          {/* Notifications list */}
           <ScrollArea className="flex-1">
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4 text-center">
                 <Bell className="h-12 w-12 opacity-20 mb-2" />
-                <p className="text-sm">
-                  {language === "fr"
-                    ? "Aucune notification"
-                    : "No notifications"}
-                </p>
+                <p className="text-sm">{language === "fr" ? "Aucune notification" : "No notifications"}</p>
               </div>
             ) : (
               <div className="space-y-0">
@@ -222,39 +196,28 @@ export default function NotificationsPage() {
         </div>
 
         {/* Resizable divider */}
-        <div
-          className="flex h-full"
-          style={{ width: `${100 - leftWidth}%`, position: "relative" }}
-        >
+        <div className="flex h-full" style={{ width: `${100 - leftWidth}%`, position: "relative" }}>
           <div
             onMouseDown={(e) => {
-              const startX = e.clientX;        
+              const startX = e.clientX;
               const startWidth = leftWidth;
               const container = document.body;
-
               const handleMove = (moveEvent: MouseEvent) => {
                 const deltaX = moveEvent.clientX - startX;
                 const containerWidth = container.clientWidth;
                 const deltaPercent = (deltaX / containerWidth) * 100;
                 const newLeftWidth = startWidth + deltaPercent;
-
-                if (newLeftWidth >= 20 && newLeftWidth <= 80) {
-                  setLeftWidth(newLeftWidth);
-                }
+                if (newLeftWidth >= 20 && newLeftWidth <= 80) setLeftWidth(newLeftWidth);
               };
-
               const handleUp = () => {
                 document.removeEventListener("mousemove", handleMove);
                 document.removeEventListener("mouseup", handleUp);
               };
-
               document.addEventListener("mousemove", handleMove);
               document.addEventListener("mouseup", handleUp);
             }}
             className="w-1 bg-border hover:bg-primary/50 transition-colors cursor-col-resize select-none"
           />
-
-          {/* Right panel - Details */}
           <div className="hidden md:flex flex-col flex-1 overflow-hidden bg-card">
             {selectedNotification ? (
               <NotificationDetailView
@@ -267,9 +230,7 @@ export default function NotificationsPage() {
               <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6 text-center">
                 <Bell className="h-16 w-16 opacity-10 mb-4" />
                 <p className="text-sm">
-                  {language === "fr"
-                    ? "Sélectionnez une notification"
-                    : "Select a notification"}
+                  {language === "fr" ? "Sélectionnez une notification" : "Select a notification"}
                 </p>
               </div>
             )}

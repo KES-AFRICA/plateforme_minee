@@ -1,12 +1,12 @@
 "use client";
 
-import { Notification } from "@/lib/api/types";
+import { NotificationDetail } from "@/lib/api/notification-details-data";
 import { NotificationListItem } from "./notification-list-item";
 
 interface NotificationGroupProps {
   date: string;
-  notifications: Notification[];
-  onSelect: (notification: Notification) => void;
+  notifications: NotificationDetail[];
+  onSelect: (notification: NotificationDetail) => void;
   selectedId?: string;
   language: string;
 }
