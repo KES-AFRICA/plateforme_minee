@@ -351,12 +351,13 @@ export default function MapPage() {
   };
 
   return (
-    <div className="h-screen w-full flex flex-col overflow-hidden">
+    <div className="h-[85vh] w-full flex flex-col overflow-hidden">
       {/* Barre d'outils */}
-      <div className="flex-shrink-0 bg-background border-b px-4 py-2 flex items-center justify-between gap-4">
+      <div className="shrink-0 flex-col md:flex-row bg-background border-b px-4 py-2 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <MapIcon className="h-5 w-5 text-primary" />
-          <h1 className="text-lg font-semibold">Carte des équipements ENEO</h1>
+          <h1 className="hidden md:flex text-lg font-semibold">Carte des équipements ENEO</h1>
+          <h1 className="flex md:hidden text-lg font-semibold">Carte</h1>
           <Badge variant="secondary" className="ml-2">
             {stats.filtered} / {stats.total} équipements
           </Badge>
@@ -387,7 +388,7 @@ export default function MapPage() {
       </div>
 
       {/* Panneau de filtres */}
-      <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen} className="flex-shrink-0">
+      <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen} className="shrink-0">
         <CollapsibleContent>
           <div className="bg-muted/30 border-b p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
