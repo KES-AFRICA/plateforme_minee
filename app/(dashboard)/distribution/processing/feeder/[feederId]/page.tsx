@@ -46,6 +46,7 @@ import { userService } from "@/lib/api/services/users";
 import { User } from "@/lib/api/types";
 import { layer1DB } from "@/data/layer1";
 import { layer2DB } from "@/data/layer2";
+import { EquipmentRecord } from "@/components/distribution/feeder-map";
 
 // ─── Leaflet client-only ──────────────────────────────────────────────────────
 const FeederMap = dynamic(
@@ -824,22 +825,40 @@ export default function FeederProcessingPage() {
     [allAnomalies]
   );
 
-// Points carte - TOUS les équipements géolocalisés du départ
+// Points carte - TOUS les équipements de layer2DB géolocalisés du départ
 const mapPoints = useMemo(() => {
-  const seen = new Set<string>();
-  return allEquipments
-    .filter((eq) => eq.location && (eq.table === "substation" || eq.table === "powertransformer" || eq.table === "switch"))
-    .map((eq) => ({
-      ...eq.data,
-      m_rid: eq.mrid,
-      name: eq.name,
-      latitude: eq.location?.lat,
-      longitude: eq.location?.lng,
-      table: eq.table,
-      _anomalyType: eq.anomalies[0]?.type,
-      _anomalyId: eq.anomalies[0]?.id,
-    }));
-}, [allEquipments]);
+  const points: EquipmentRecord[] = [];
+  
+  // Récupérer tous les équipements du feeder depuis layer2DB uniquement
+  const tables = ["substation", "powertransformer", "busbar", "bay", "switch", "wire", "pole", "node"];
+  
+  tables.forEach(table => {
+    const layer2Records = (layer2DB as any)[table] || [];
+    layer2Records.forEach((record: any) => {
+      // Vérifier que l'équipement appartient bien à ce feeder
+      if (String(record.feeder_id) === feederId) {
+        // Vérifier qu'il a des coordonnées valides
+        const lat = parseFloat(String(record.latitude ?? ""));
+        const lng = parseFloat(String(record.longitude ?? ""));
+        
+        if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+          // Vérifier si cet équipement a une anomalie
+          const anomaly = allAnomalies.find(a => String(a.mrid) === String(record.m_rid));
+          
+          points.push({
+            ...record,
+            table,
+            _anomalyType: anomaly?.type,
+            _anomalyId: anomaly?.id,
+            _hasAnomaly: !!anomaly,
+          });
+        }
+      }
+    });
+  });
+  
+  return points;
+}, [feederId, allAnomalies]);
 
   const handleFieldChange = useCallback((id: string, field: string, val: string) => {
     setTreatment((prev) => ({

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Layers, ChevronDown, ChevronUp, Map, Satellite, Check } from "lucide-react";
 
-interface EquipmentRecord {
+export interface EquipmentRecord {
   m_rid: string | number;
   name?: string;
   latitude?: number | string | null;
@@ -57,37 +57,48 @@ function createSVGIcon(equip: EquipmentRecord, L: any, hasAnomaly: boolean): any
 
   let svgPath = "";
   if (shape === "circle") {
-    svgPath = `<circle cx="14" cy="14" r="10" fill="${color}" stroke="white" stroke-width="2"/>`;
+    svgPath = `<circle cx="14" cy="14" r="10" fill="${color}" stroke="white" stroke-width="2.5"/>`;
   } else if (shape === "square") {
-    svgPath = `<rect x="4" y="4" width="20" height="20" rx="3" fill="${color}" stroke="white" stroke-width="2"/>`;
+    svgPath = `<rect x="4" y="4" width="20" height="20" rx="3" fill="${color}" stroke="white" stroke-width="2.5"/>`;
   } else {
     // octagon
-    svgPath = `<polygon points="9,4 19,4 24,9 24,19 19,24 9,24 4,19 4,9" fill="${color}" stroke="white" stroke-width="2"/>`;
+    svgPath = `<polygon points="9,4 19,4 24,9 24,19 19,24 9,24 4,19 4,9" fill="${color}" stroke="white" stroke-width="2.5"/>`;
   }
 
-  // Ajout d'une animation radar si anomalie
+  // Ajout d'une animation radar BEAUCOUP PLUS PRONONCÉE si anomalie
   const radarAnimation = hasAnomalyAttr ? `
-    <circle cx="14" cy="14" r="14" fill="none" stroke="${color}" stroke-width="1.5" opacity="0.6">
-      <animate attributeName="r" values="14;20;14" dur="2s" repeatCount="indefinite" />
-      <animate attributeName="opacity" values="0.6;0;0.6" dur="2s" repeatCount="indefinite" />
+    <!-- Cercle extérieur pulsant principal -->
+    <circle cx="14" cy="14" r="16" fill="none" stroke="${color}" stroke-width="3" opacity="0.9">
+      <animate attributeName="r" values="16;28;16" dur="1.5s" repeatCount="indefinite" />
+      <animate attributeName="opacity" values="0.9;0;0.9" dur="1.5s" repeatCount="indefinite" />
     </circle>
-    <circle cx="14" cy="14" r="18" fill="none" stroke="${color}" stroke-width="1" opacity="0.4">
-      <animate attributeName="r" values="18;24;18" dur="2s" repeatCount="indefinite" begin="0.5s" />
-      <animate attributeName="opacity" values="0.4;0;0.4" dur="2s" repeatCount="indefinite" begin="0.5s" />
+    <!-- Deuxième vague avec décalage -->
+    <circle cx="14" cy="14" r="20" fill="none" stroke="${color}" stroke-width="2.5" opacity="0.7">
+      <animate attributeName="r" values="20;32;20" dur="1.8s" repeatCount="indefinite" begin="0.3s" />
+      <animate attributeName="opacity" values="0.7;0;0.7" dur="1.8s" repeatCount="indefinite" begin="0.3s" />
+    </circle>
+    <!-- Troisième vague encore plus large -->
+    <circle cx="14" cy="14" r="24" fill="none" stroke="${color}" stroke-width="2" opacity="0.5">
+      <animate attributeName="r" values="24;36;24" dur="2.1s" repeatCount="indefinite" begin="0.6s" />
+      <animate attributeName="opacity" values="0.5;0;0.5" dur="2.1s" repeatCount="indefinite" begin="0.6s" />
+    </circle>
+    <!-- Glow / halo constant autour du marqueur -->
+    <circle cx="14" cy="14" r="12" fill="none" stroke="${color}" stroke-width="1.5" opacity="0.4">
+      <animate attributeName="r" values="12;14;12" dur="1.2s" repeatCount="indefinite" />
     </circle>
   ` : "";
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" width="28" height="28">
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" width="32" height="32">
     ${radarAnimation}
     ${svgPath}
-    <circle cx="14" cy="14" r="3" fill="white" opacity="0.9"/>
+    <circle cx="14" cy="14" r="3" fill="white" stroke="${color}" stroke-width="1.5" opacity="0.95"/>
   </svg>`;
 
   return L.divIcon({
     html: svg,
     className: "custom-marker",
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
     popupAnchor: [0, -16],
   });
 }
@@ -99,7 +110,7 @@ export default function FeederMap({ equipments, feederId, onMarkerClick }: Feede
   const markersRef = useRef<any[]>([]);
   const tileLayerRef = useRef<any>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isLegendOpen, setIsLegendOpen] = useState(true);
+  const [isLegendOpen, setIsLegendOpen] = useState(false);
   const [isLayerOpen, setIsLayerOpen] = useState(false);
   const [currentLayer, setCurrentLayer] = useState<LayerType>("street");
 
@@ -229,20 +240,28 @@ export default function FeederMap({ equipments, feederId, onMarkerClick }: Feede
             </div>
           `).join("");
           
+          const anomalyBadge = hasAnomaly ? `
+            <div style="margin-top:6px;padding:4px 8px;background:${getEquipmentColor(e)}20;border-left:3px solid ${getEquipmentColor(e)};border-radius:4px">
+              <span style="font-size:10px;font-weight:600;color:${getEquipmentColor(e)}">⚠️ ANOMALIE: ${e._anomalyType?.toUpperCase()}</span>
+            </div>
+          ` : "";
+          
           const popupContent = `
-            <div style="font-family:sans-serif;min-width:200px;max-width:280px">
-              <div style="font-weight:600;font-size:13px;margin-bottom:6px;border-bottom:1px solid #ddd;padding-bottom:4px">
+            <div style="font-family:sans-serif;min-width:220px;max-width:300px">
+              <div style="font-weight:700;font-size:14px;margin-bottom:6px;border-bottom:2px solid ${hasAnomaly ? getEquipmentColor(e) : '#ddd'};padding-bottom:4px;color:${hasAnomaly ? getEquipmentColor(e) : '#333'}">
                 ${e.name || e.m_rid}
+                ${hasAnomaly ? ' ⚠️' : ''}
               </div>
               <div style="font-size:10px;color:#666;margin-bottom:8px">
                 <span style="background:#f0f0f0;padding:2px 6px;border-radius:4px">${e.table || "équipement"}</span>
-                ${hasAnomaly ? `<span style="background:#fee2e2;color:#dc2626;padding:2px 6px;border-radius:4px;margin-left:4px">⚠️ ${e._anomalyType}</span>` : ""}
+                ${hasAnomaly ? `<span style="background:${getEquipmentColor(e)}20;color:${getEquipmentColor(e)};padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:500">${e._anomalyType}</span>` : '<span style="background:#e6f7e6;color:#2e7d32;padding:2px 6px;border-radius:4px;margin-left:4px">✓ Conforme</span>'}
               </div>
               <div style="max-height:200px;overflow-y:auto">
                 ${fieldsHtml}
               </div>
+              ${anomalyBadge}
               <button 
-                style="margin-top:8px;padding:6px 12px;background:#6366f1;color:white;border:none;border-radius:6px;font-size:11px;cursor:pointer;width:100%"
+                style="margin-top:8px;padding:6px 12px;background:#6366f1;color:white;border:none;border-radius:6px;font-size:11px;cursor:pointer;width:100%;font-weight:500"
                 onclick="window.__markerClickCallback && window.__markerClickCallback(${JSON.stringify(e).replace(/"/g, '&quot;')})"
               >
                 📋 Voir tous les détails →
@@ -277,9 +296,9 @@ export default function FeederMap({ equipments, feederId, onMarkerClick }: Feede
         const sorted = [...points].sort((a, b) => b[0] - a[0]);
         L.polyline(sorted, {
           color: "#6366f1",
-          weight: 2,
-          opacity: 0.6,
-          dashArray: "6 4",
+          weight: 3,
+          opacity: 0.7,
+          dashArray: "8 6",
         }).addTo(map);
       }
 
@@ -287,10 +306,10 @@ export default function FeederMap({ equipments, feederId, onMarkerClick }: Feede
       if (points.length === 0) {
         map.setView([4.06, 9.72], 13);
       } else if (points.length === 1) {
-        map.setView(points[0], 14);
+        map.setView(points[0], 15);
       } else {
         const bounds = L.latLngBounds(points);
-        map.fitBounds(bounds, { padding: [30, 30] });
+        map.fitBounds(bounds, { padding: [50, 50] });
       }
     });
 
@@ -351,7 +370,7 @@ export default function FeederMap({ equipments, feederId, onMarkerClick }: Feede
         </button>
 
         {/* Bouton de couche avec dropdown */}
-        <div className="absolute bottom-4 right-4 z-10">
+        <div className="absolute bottom-1 right-4 z-10">
           <div className="relative">
             <button
               onClick={() => setIsLayerOpen(!isLayerOpen)}
@@ -409,10 +428,44 @@ export default function FeederMap({ equipments, feederId, onMarkerClick }: Feede
           </div>
         </div>
 
-        {/* Légende rétractable */}
-        <div className="absolute bottom-4 left-4 z-10">
-          <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg overflow-hidden" style={{ minWidth: "160px" }}>
-            <button
+        {/* Légende améliorée avec distinction claire */}
+        <div className="absolute bottom-1 left-4 z-10">
+          <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg overflow-hidden" style={{ minWidth: "180px" }}>
+
+            {isLegendOpen && (
+              <div className="px-3 pb-3 pt-1 space-y-2 text-[11px] border-t border-gray-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                  <span className="text-gray-700">H59 — Régime PR (conforme)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-amber-500" style={{ clipPath: "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)" }}></div>
+                  <span className="text-gray-700">H61 — Régime DP (conforme)</span>
+                </div>
+                <div className="flex items-center gap-2 pt-1 border-t border-gray-100 mt-1">
+                  <div className="relative">
+                    <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                    <div className="absolute inset-0 rounded-full bg-purple-500 animate-ping opacity-75"></div>
+                  </div>
+                  <span className="text-gray-700 font-medium">⚠️ Doublon (anomalie)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+                    <div className="absolute inset-0 rounded-full bg-amber-500 animate-ping opacity-75"></div>
+                  </div>
+                  <span className="text-gray-700 font-medium">⚠️ Divergence (anomalie)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                    <div className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-75"></div>
+                  </div>
+                  <span className="text-gray-700 font-medium">✨ Nouvel équipement (anomalie)</span>
+                </div>
+              </div>
+            )}
+                        <button
               onClick={() => setIsLegendOpen(!isLegendOpen)}
               className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-50 transition-colors"
             >
@@ -424,33 +477,6 @@ export default function FeederMap({ equipments, feederId, onMarkerClick }: Feede
               )}
             </button>
             
-            {isLegendOpen && (
-              <div className="px-3 pb-3 pt-1 space-y-1.5 text-[11px] border-t border-gray-100">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                  <span className="text-gray-700">H59 — Régime PR</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-amber-500" style={{ clipPath: "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)" }}></div>
-                  <span className="text-gray-700">H61 — Régime DP</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-violet-500" style={{ clipPath: "polygon(25% 0%, 75% 0%, 100% 25%, 100% 75%, 75% 100%, 25% 100%, 0% 75%, 0% 25%)" }}></div>
-                  <span className="text-gray-700">Autre type</span>
-                </div>
-                <div className="flex items-center gap-2 pt-1 border-t border-gray-100 mt-1">
-                  <div className="w-5 h-0.5 bg-violet-500"></div>
-                  <span className="text-gray-700">Ligne du départ</span>
-                </div>
-                <div className="flex items-center gap-2 pt-1">
-                  <div className="relative">
-                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                    <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-50"></div>
-                  </div>
-                  <span className="text-gray-700">Équipement avec anomalie (onde radar)</span>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
