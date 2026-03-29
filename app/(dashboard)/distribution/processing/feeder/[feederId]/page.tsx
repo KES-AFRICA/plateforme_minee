@@ -253,7 +253,6 @@ function AssignDialog({
 }
 
 // ─── Sheet pour les détails d'équipement ──────────────────────────────────────
-// ─── Sheet pour les détails d'équipement ──────────────────────────────────────
 function EquipmentDetailSheet({
   equipment,
   isOpen,
@@ -825,18 +824,22 @@ export default function FeederProcessingPage() {
     [allAnomalies]
   );
 
-  // Points carte
-  const mapPoints = useMemo(() => {
-    const seen = new Set<string>();
-    return allEquipments
-      .filter((eq) => eq.table === "substation" && eq.location)
-      .map((eq) => ({
-        ...eq.data,
-        _anomalyType: eq.anomalies[0]?.type,
-        _anomalyId: eq.anomalies[0]?.id,
-        _table: eq.table,
-      }));
-  }, [allEquipments]);
+// Points carte - TOUS les équipements géolocalisés du départ
+const mapPoints = useMemo(() => {
+  const seen = new Set<string>();
+  return allEquipments
+    .filter((eq) => eq.location && (eq.table === "substation" || eq.table === "powertransformer" || eq.table === "switch"))
+    .map((eq) => ({
+      ...eq.data,
+      m_rid: eq.mrid,
+      name: eq.name,
+      latitude: eq.location?.lat,
+      longitude: eq.location?.lng,
+      table: eq.table,
+      _anomalyType: eq.anomalies[0]?.type,
+      _anomalyId: eq.anomalies[0]?.id,
+    }));
+}, [allEquipments]);
 
   const handleFieldChange = useCallback((id: string, field: string, val: string) => {
     setTreatment((prev) => ({
@@ -919,7 +922,7 @@ export default function FeederProcessingPage() {
   );
 
   return (
-    <div className="w-full min-w-0 space-y-4 px-4 py-4 sm:px-6">
+    <div className="w-full min-w-0 space-y-4 md:px-4 md:py-4 sm:px-6">
 
       {/* En-tête avec bouton assigner */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -987,9 +990,9 @@ export default function FeederProcessingPage() {
       )}
 
       {/* Carte Leaflet */}
-      <div className="w-full rounded-xl overflow-hidden border border-border" style={{ height: "20vh", minHeight: 160 }}>
+      <div className="w-full rounded-xl overflow-hidden border border-border" style={{ height: "30vh", minHeight: 160 }}>
         <FeederMap 
-          substations={mapPoints} 
+          equipments={mapPoints} 
           feederId={feederId} 
           onMarkerClick={handleMapMarkerClick}
         />
