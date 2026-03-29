@@ -354,14 +354,14 @@ export default function MapPage() {
     <div className="h-[85vh] w-full flex flex-col overflow-hidden">
       {/* Barre d'outils */}
       <div className="shrink-0 flex-col md:flex-row bg-background border-b px-4 py-2 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
+        {/* <div className="flex items-center gap-2">
           <MapIcon className="h-5 w-5 text-primary" />
           <h1 className="hidden md:flex text-lg font-semibold">Carte des équipements ENEO</h1>
           <h1 className="flex md:hidden text-lg font-semibold">Carte</h1>
           <Badge variant="secondary" className="ml-2">
             {stats.filtered} / {stats.total} équipements
           </Badge>
-        </div>
+        </div> */}
         
         <div className="flex items-center gap-2">
           <Button
