@@ -1,4 +1,3 @@
-// app/dashboard/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -54,7 +53,6 @@ export default function DashboardPage() {
         taskService.getRecentActivity(10, dateRange.start, dateRange.end),
         userService.getAgentStats(dateRange.start, dateRange.end),
       ]);
-
       if (statsRes.data) setStats(statsRes.data);
       if (trendRes.data) setWeeklyTrend(trendRes.data);
       if (activityRes.data) setActivities(activityRes.data);
@@ -70,45 +68,43 @@ export default function DashboardPage() {
     fetchData();
   }, [dateRange]);
 
-  const handleRangeTypeChange = (type: DateRangeType) => {
-    setDateRangeType(type);
-  };
-
-  const handleCustomRangeChange = (range: DateRange) => {
-    setCustomRange(range);
-  };
-
   const totalProcessed = stats?.totalTasks || 0;
   const totalCompleted = stats?.completed || 0;
 
   return (
-    <div className="space-y-6">
-      {/* Welcome Header */}
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              Bonjour, {user?.firstName}
-            </h1>
-            <p className="text-muted-foreground">
-              Tableau de bord - {formatDateRange()}
-            </p>
-          </div>
+    <div className="w-full min-w-0 space-y-4 md:px-4 md:py-4 sm:px-6 sm:space-y-6">
+
+      {/* ── Header ── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl truncate">
+            Bonjour, {user?.firstName}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Tableau de bord · {formatDateRange()}
+          </p>
+        </div>
+        {/* DateFilter passe en pleine largeur sur mobile */}
+        <div className="w-full sm:w-auto shrink-0">
           <DateFilter
             dateRangeType={dateRangeType}
             dateRange={dateRange}
-            onRangeTypeChange={handleRangeTypeChange}
-            onCustomRangeChange={handleCustomRangeChange}
+            onRangeTypeChange={(type: DateRangeType) => setDateRangeType(type)}
+            onCustomRangeChange={(range: DateRange) => setCustomRange(range)}
           />
         </div>
       </div>
 
-      {/* Stats Grid - Status de traitement */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+      {/* ── Stat cards — statuts ──
+          Mobile  : 2 colonnes
+          md      : 3 colonnes
+          xl      : 5 colonnes
+      */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5 sm:gap-4">
         <StatCard
           title="En attente"
           value={isLoading ? "-" : stats?.pending.toLocaleString() || "0"}
-          description="En attente de traitement"
+          description="En attente"
           icon={Clock}
           variant="default"
           total={totalProcessed}
@@ -116,15 +112,17 @@ export default function DashboardPage() {
         <StatCard
           title="En cours"
           value={isLoading ? "-" : stats?.inProgress.toLocaleString() || "0"}
-          description="En cours de traitement"
+          description="En cours"
           icon={Loader2}
           variant="warning"
           total={totalProcessed}
         />
+        {/* Sur mobile cette carte prend toute la largeur pour garder l'équilibre (2+1) */}
         <StatCard
+          className="col-span-2 md:col-span-1"
           title="Traités"
           value={isLoading ? "-" : stats?.completed.toLocaleString() || "0"}
-          description="Traitement terminé"
+          description="Terminé"
           icon={CheckCircle2}
           variant="primary"
           total={totalProcessed}
@@ -132,7 +130,7 @@ export default function DashboardPage() {
         <StatCard
           title="Validés"
           value={isLoading ? "-" : stats?.validated.toLocaleString() || "0"}
-          description="Validation finale"
+          description="Validés"
           icon={CheckCircle2}
           variant="success"
           total={totalCompleted}
@@ -140,15 +138,18 @@ export default function DashboardPage() {
         <StatCard
           title="Rejetés"
           value={isLoading ? "-" : stats?.rejected.toLocaleString() || "0"}
-          description="Rejeté"
+          description="Rejetés"
           icon={XCircle}
           variant="destructive"
           total={totalCompleted}
         />
       </div>
 
-      {/* Rate Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
+      {/* ── Taux ──
+          Mobile : 1 colonne
+          sm     : 3 colonnes
+      */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
         <StatCard
           title="Taux de traitement"
           value={isLoading ? "-" : `${stats?.processingRate.toFixed(1) || 0}%`}
@@ -169,14 +170,20 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Charts and Activity */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* ── Charts ──
+          Mobile : 1 colonne (empilé)
+          lg     : 2 colonnes
+      */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
         <WeeklyChart data={weeklyTrend} isLoading={isLoading} />
         {stats && <TaskDistribution stats={stats} isLoading={isLoading} />}
       </div>
 
-      {/* Agent Stats and Activity */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* ── Agents & Activités ──
+          Mobile : 1 colonne (empilé)
+          lg     : 2 colonnes
+      */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
         <AgentStats stats={agentStats} isLoading={isLoading} />
         <ActivityFeed activities={activities} isLoading={isLoading} />
       </div>

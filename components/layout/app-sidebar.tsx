@@ -136,22 +136,6 @@ export function AppSidebar() {
       ],
     },
     {
-      title: "Génie civil",
-      icon: Building2,
-      items: [
-        {
-          title: "Traitement",
-          icon: Database,
-          items: [
-            { title: "Vérifications", url: "/genie-civil/processing/verifications", icon: Eye },
-            { title: "Cas complexes", url: "/genie-civil/processing/complex", icon: AlertCircle },
-            { title: "Rejets", url: "/genie-civil/processing/rejets", icon: XCircle },
-          ],
-        },
-        { title: t("nav.validation"), url: "/genie-civil/validation", icon: CheckSquare },
-      ],
-    },
-    {
       title: t("nav.users"),
       url: "/users",
       icon: Users,

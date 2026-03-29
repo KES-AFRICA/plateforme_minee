@@ -83,7 +83,7 @@ export function AppHeader() {
       <div className="flex items-center gap-2">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-2 h-4" />
-        <Breadcrumb>
+        <Breadcrumb className="hidden md:flex">
           <BreadcrumbList>
             {breadcrumbItems.length > 0 ? (
               breadcrumbItems.map((item, index) => (
