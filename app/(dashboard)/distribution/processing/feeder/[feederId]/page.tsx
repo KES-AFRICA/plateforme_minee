@@ -11,7 +11,7 @@ import {
   CheckCircle2, ChevronRight, ChevronDown, Pencil,
   X, Check, Zap, Building2, Cable, Box, ToggleLeft,
   Layers, Info, MapPin, Save, UserCheck, Users, Filter,
-  Play, Clock, Timer
+  Play, Clock, Timer, User
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,17 +41,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import React from "react";
 import { userService } from "@/lib/api/services/users";
-import { User } from "@/lib/api/types";
+import { User as UserType } from "@/lib/api/types";
 import { layer1DB } from "@/data/layer1";
 import { layer2DB } from "@/data/layer2";
 import { EquipmentRecord } from "@/components/distribution/feeder-map";
@@ -75,6 +68,7 @@ const FeederMap = dynamic(
 // ─── Types ────────────────────────────────────────────────────────────────────
 type AnomalyType = "duplicate" | "divergence" | "new" | "missing" | "complex";
 type EquipmentFilter = "all" | "ok" | AnomalyType;
+type FeederStatus = "collecting" | "pending" | "processing";
 
 interface TreatmentState {
   [anomalyId: string]: {
@@ -91,6 +85,14 @@ interface EquipmentDetail {
   data: Record<string, unknown>;
   anomalies: AnomalyCase[];
   location?: { lat: number; lng: number };
+}
+
+interface FeederAssignment {
+  feederId: string;
+  status: FeederStatus;
+  assignedAgentId?: string;
+  assignedAgentName?: string;
+  treatmentStartTime?: number | null;
 }
 
 // ─── KPI Config avec ajout du filtre "Tous" et "OK" ───────────────────────────
@@ -150,7 +152,7 @@ function AnomalyBadge({ type }: { type: AnomalyType }) {
   );
 }
 
-// ─── Dialog d'assignation (inchangé) ─────────────────────────────────────────
+// ─── Dialog d'assignation (avec localStorage) ─────────────────────────────────────────
 function AssignDialog({
   isOpen,
   onClose,
@@ -158,13 +160,15 @@ function AssignDialog({
   feederName,
   processingAgents,
   isAssigning,
+  currentUser,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onAssign: (agentId: string, agentName: string) => void;
   feederName: string;
-  processingAgents: User[];
+  processingAgents: UserType[];
   isAssigning: boolean;
+  currentUser: UserType | null;
 }) {
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
 
@@ -266,7 +270,7 @@ function AssignDialog({
   );
 }
 
-// ─── Sheet pour les détails d'équipement ──────────────────────────────────────
+// ─── Sheet pour les détails d'équipement (toujours cliquable) ─────────────────
 function EquipmentDetailSheet({
   equipment,
   isOpen,
@@ -275,6 +279,7 @@ function EquipmentDetailSheet({
   treatment,
   onFieldChange,
   isTreatmentActive,
+  isTreatmentAllowed,
 }: {
   equipment: EquipmentDetail | null;
   isOpen: boolean;
@@ -283,13 +288,13 @@ function EquipmentDetailSheet({
   treatment: TreatmentState;
   onFieldChange: (anomalyId: string, field: string, val: string) => void;
   isTreatmentActive: boolean;
+  isTreatmentAllowed: boolean | null;
 }) {
   const [editedData, setEditedData] = useState<Record<string, unknown>>({});
   const [isSaving, setIsSaving] = useState(false);
 
   const allFields = useMemo(() => {
     if (!equipment) return [];
-    // Filtrer pour exclure created_date et autres champs système
     return Object.keys(editedData)
       .filter(k => k !== "m_rid" && k !== "_anomalyType" && k !== "_anomalyId" && k !== "_table" && k !== "created_date" && k !== "created_at")
       .sort();
@@ -338,6 +343,8 @@ function EquipmentDetailSheet({
       setIsSaving(false);
     }
   };
+
+  const canEdit = isTreatmentActive && isTreatmentAllowed;
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
@@ -420,12 +427,12 @@ function EquipmentDetailSheet({
                 <div key={field} className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground flex items-center justify-between">
                     <span>{fl(field)}</span>
-                    {isModified && isTreatmentActive && (
+                    {isModified && canEdit && (
                       <span className="text-[10px] text-amber-600">modifié</span>
                     )}
                   </Label>
                   
-                  {!isTreatmentActive ? (
+                  {!canEdit ? (
                     <div className="p-2 rounded-md bg-muted/20 text-sm font-mono">
                       {fv(value)}
                     </div>
@@ -433,7 +440,6 @@ function EquipmentDetailSheet({
                     <Select
                       value={String(value)}
                       onValueChange={(v) => handleFieldChange(field, v === "true" || v === "oui" || v === "Oui")}
-                      disabled={!isTreatmentActive}
                     >
                       <SelectTrigger className="h-9 text-sm">
                         <SelectValue />
@@ -447,12 +453,10 @@ function EquipmentDetailSheet({
                     <textarea
                       value={String(value)}
                       onChange={(e) => handleFieldChange(field, e.target.value)}
-                      disabled={!isTreatmentActive}
                       className={cn(
                         "w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                        isModified && isTreatmentActive && "border-amber-500",
-                        !isTreatmentActive && "bg-muted/20 cursor-not-allowed"
+                        isModified && "border-amber-500"
                       )}
                       rows={3}
                     />
@@ -461,16 +465,14 @@ function EquipmentDetailSheet({
                       type={inputType}
                       value={String(value)}
                       onChange={(e) => handleFieldChange(field, inputType === "number" ? parseFloat(e.target.value) : e.target.value)}
-                      disabled={!isTreatmentActive}
                       className={cn(
                         "h-9 text-sm",
-                        isModified && isTreatmentActive && "border-amber-500 focus-visible:ring-amber-500",
-                        !isTreatmentActive && "bg-muted/20 cursor-not-allowed"
+                        isModified && "border-amber-500 focus-visible:ring-amber-500"
                       )}
                     />
                   )}
                   
-                  {isModified && originalValue !== undefined && isTreatmentActive && (
+                  {isModified && originalValue !== undefined && canEdit && (
                     <p className="text-[10px] text-muted-foreground">
                       Ancienne valeur: {fv(originalValue)}
                     </p>
@@ -480,7 +482,7 @@ function EquipmentDetailSheet({
             })}
           </div>
 
-          {equipment.anomalies.some(a => a.type === "divergence") && (
+          {equipment.anomalies.some(a => a.type === "divergence") && canEdit && (
             <div className="space-y-2">
               <Label className="text-xs font-semibold uppercase tracking-wider text-amber-600">
                 Champs en divergence (BD1 vs BD2)
@@ -508,16 +510,12 @@ function EquipmentDetailSheet({
                         </div>
                         <div>
                           <p className="text-muted-foreground mb-1">BD2 (Terrain)</p>
-                          {anomalyId && isTreatmentActive ? (
+                          {anomalyId && (
                             <Input
                               value={currentValue}
                               onChange={(e) => onFieldChange(anomalyId, field.field, e.target.value)}
                               className="h-8 text-sm font-mono border-amber-500"
                             />
-                          ) : (
-                            <p className="font-mono p-2 rounded bg-amber-500/10 text-amber-600">
-                              {fv(field.layer2Value)}
-                            </p>
                           )}
                         </div>
                       </div>
@@ -528,7 +526,7 @@ function EquipmentDetailSheet({
           )}
         </div>
 
-        {isTreatmentActive && (
+        {canEdit && (
           <SheetFooter className="px-5 py-4 border-t shrink-0 flex flex-row gap-3 sm:gap-2">
             <Button variant="outline" className="flex-1" onClick={onClose}>
               Annuler
@@ -554,22 +552,30 @@ function EquipmentDetailSheet({
 }
 
 // ─── Carte d'équipement (pour les bons équipements) ───────────────────────────
-function EquipmentCard({ equipment, onEquipmentClick, isTreatmentActive }: {
+function EquipmentCard({ equipment, onEquipmentClick, isClickable }: {
   equipment: EquipmentDetail;
   onEquipmentClick?: (equipment: EquipmentDetail) => void;
-  isTreatmentActive: boolean;
+  isClickable: boolean;
 }) {
   const Icon = TABLE_ICONS[equipment.table] || Box;
   const iconColor = "text-primary";
   
   const displayFields = ["name", "code", "type", "voltage", "active"].filter(f => equipment.data[f] !== undefined).slice(0, 3);
 
+  const handleClick = () => {
+    if (isClickable) {
+      onEquipmentClick?.(equipment);
+    } else {
+      toast.info("Le traitement n'a pas encore commencé pour ce départ");
+    }
+  };
+
   return (
     <div 
-      onClick={() => onEquipmentClick?.(equipment)}
+      onClick={handleClick}
       className={cn(
-        "rounded-xl border border-border bg-card cursor-pointer hover:shadow-md hover:border-primary/50 transition-all",
-        !isTreatmentActive && "opacity-60 cursor-not-allowed hover:border-border"
+        "rounded-xl border border-border bg-card transition-all",
+        isClickable ? "cursor-pointer hover:shadow-md hover:border-primary/50" : "cursor-pointer"
       )}
     >
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/40">
@@ -595,12 +601,12 @@ function EquipmentCard({ equipment, onEquipmentClick, isTreatmentActive }: {
 }
 
 // ─── Carte d'anomalie ─────────────────────────────────────────────────────────
-function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquipmentClick, isTreatmentActive }: {
+function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquipmentClick, isClickable }: {
   anomaly: AnomalyCase; treatment: TreatmentState;
   onFieldChange: (id: string, field: string, val: string) => void;
   onMarkTreated: (id: string) => void;
   onEquipmentClick?: (equipment: EquipmentDetail) => void;
-  isTreatmentActive: boolean;
+  isClickable: boolean;
 }) {
   const t = treatment[anomaly.id];
   const isTreated = t?.treated ?? false;
@@ -631,13 +637,21 @@ function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquip
     };
   }, [anomaly, rec1, rec2]);
 
+  const handleCardClick = () => {
+    if (isClickable && equipmentDetail) {
+      onEquipmentClick?.(equipmentDetail);
+    } else {
+      toast.info("Le traitement n'a pas encore commencé pour ce départ");
+    }
+  };
+
   return (
     <div 
-      className={cn("rounded-xl border transition-all cursor-pointer hover:shadow-md", 
+      className={cn("rounded-xl border transition-all", 
         isTreated ? "border-emerald-500/30 bg-emerald-500/5" : "border-border bg-card",
-        !isTreatmentActive && "opacity-60 cursor-not-allowed hover:border-border"
+        isClickable ? "cursor-pointer hover:shadow-md" : "cursor-pointer"
       )}
-      onClick={() => isTreatmentActive && equipmentDetail && onEquipmentClick?.(equipmentDetail)}
+      onClick={handleCardClick}
     >
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 border-b border-border/40">
         <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -659,7 +673,7 @@ function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquip
             </div>
           ))}
         </div>
-        {!isTreated && isTreatmentActive && (
+        {!isTreated && isClickable && (
           <div className="flex justify-end pt-2 mt-2 border-t border-border/40">
             <button 
               onClick={(e) => { e.stopPropagation(); onMarkTreated(anomaly.id); }}
@@ -675,7 +689,7 @@ function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquip
 }
 
 // ─── Groupe par table avec filtrage amélioré ─────────────────────────────────
-function TableGroup({ table, allAnomalies, allGoodEquipments, filter, treatment, onFieldChange, onMarkTreated, onEquipmentClick, defaultOpen, isTreatmentActive }: {
+function TableGroup({ table, allAnomalies, allGoodEquipments, filter, treatment, onFieldChange, onMarkTreated, onEquipmentClick, defaultOpen, isClickable }: {
   table: string; 
   allAnomalies: AnomalyCase[]; 
   allGoodEquipments: EquipmentDetail[];
@@ -685,7 +699,7 @@ function TableGroup({ table, allAnomalies, allGoodEquipments, filter, treatment,
   onMarkTreated: (id: string) => void;
   onEquipmentClick?: (equipment: EquipmentDetail) => void;
   defaultOpen: boolean;
-  isTreatmentActive: boolean;
+  isClickable: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const Icon = TABLE_ICONS[table] || Box;
@@ -730,7 +744,7 @@ function TableGroup({ table, allAnomalies, allGoodEquipments, filter, treatment,
               onFieldChange={onFieldChange} 
               onMarkTreated={onMarkTreated}
               onEquipmentClick={onEquipmentClick}
-              isTreatmentActive={isTreatmentActive}
+              isClickable={isClickable}
             />
           ))}
           
@@ -739,7 +753,7 @@ function TableGroup({ table, allAnomalies, allGoodEquipments, filter, treatment,
               key={eq.id} 
               equipment={eq} 
               onEquipmentClick={onEquipmentClick} 
-              isTreatmentActive={isTreatmentActive}
+              isClickable={isClickable}
             />
           ))}
         </div>
@@ -770,12 +784,12 @@ function TimerDisplay({ startTime }: { startTime: number | null }) {
   if (!startTime) return null;
 
   return (
-    <div className="flex items-center justify-center gap-2 px-3 py-1 rounded-lg bg-primary/10 border border-primary/20 w-full ">
-        <div className="flex items-center">
-                <Timer className="h-4 w-4 text-primary" />
-      <span className="text-sm font-medium text-muted-foreground">Temps écoulé:</span>
-      <span className="text-base font-bold text-primary font-mono tracking-wide">{elapsed}</span>
-        </div>
+    <div className="flex items-center justify-center gap-2 px-3 py-1 rounded-lg bg-primary/10 border border-primary/20 w-full">
+      <div className="flex items-center">
+        <Timer className="h-4 w-4 text-primary" />
+        <span className="text-sm font-medium text-muted-foreground ml-1">Temps écoulé:</span>
+        <span className="text-base font-bold text-primary font-mono tracking-wide ml-1">{elapsed}</span>
+      </div>
     </div>
   );
 }
@@ -792,44 +806,214 @@ export default function FeederProcessingPage() {
   const [selectedEquipment, setSelectedEquipment] = useState<EquipmentDetail | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
-  const [processingAgents, setProcessingAgents] = useState<User[]>([]);
+  const [processingAgents, setProcessingAgents] = useState<UserType[]>([]);
   const [isAssigning, setIsAssigning] = useState(false);
+  const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   
-  // État pour le traitement
-  const [isTreatmentActive, setIsTreatmentActive] = useState(false);
+  // États pour la gestion du statut du feeder
+  const [feederStatus, setFeederStatus] = useState<FeederStatus>("collecting");
+  const [assignedAgent, setAssignedAgent] = useState<{ id: string; name: string } | null>(null);
   const [treatmentStartTime, setTreatmentStartTime] = useState<number | null>(null);
-  const [treatmentTimerKey, setTreatmentTimerKey] = useState(0);
+  
+  // État pour savoir si le traitement est actif (pour la modification des champs)
+  const isTreatmentActive = feederStatus === "processing";
 
-  // Vérifier l'état du traitement au chargement (sessionStorage pour persistance page)
+  // Charger l'état du feeder depuis localStorage
   useEffect(() => {
-    const savedState = sessionStorage.getItem(`treatment_${feederId}`);
-    if (savedState) {
-      const { active, startTime } = JSON.parse(savedState);
-      setIsTreatmentActive(active);
-      if (startTime) {
-        setTreatmentStartTime(startTime);
+    const loadFeederState = () => {
+      const stored = localStorage.getItem(`feeder_${feederId}`);
+      if (stored) {
+        const data: FeederAssignment = JSON.parse(stored);
+        setFeederStatus(data.status);
+        if (data.assignedAgentId && data.assignedAgentName) {
+          setAssignedAgent({ id: data.assignedAgentId, name: data.assignedAgentName });
+        }
+        if (data.treatmentStartTime) {
+          setTreatmentStartTime(data.treatmentStartTime);
+        }
+      } else {
+        // Statut par défaut: en cours de collecte
+        setFeederStatus("collecting");
       }
-    }
+    };
+    
+    loadFeederState();
+    
+    // Simuler un utilisateur connecté (à remplacer par votre logique d'authentification)
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await userService.getUsers();
+        if (response.data && response.data.data.length > 0) {
+          // Simuler l'utilisateur connecté (le premier de la liste)
+          setCurrentUser(response.data.data[0]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch current user", error);
+      }
+    };
+    fetchCurrentUser();
   }, [feederId]);
 
-  // Sauvegarder l'état du traitement
-  const saveTreatmentState = (active: boolean, startTime: number | null) => {
-    sessionStorage.setItem(`treatment_${feederId}`, JSON.stringify({ active, startTime }));
+  // Sauvegarder l'état du feeder dans localStorage
+  const saveFeederState = (status: FeederStatus, agent?: { id: string; name: string } | null, startTime?: number | null) => {
+    const state: FeederAssignment = {
+      feederId,
+      status,
+      assignedAgentId: agent?.id,
+      assignedAgentName: agent?.name,
+      treatmentStartTime: startTime,
+    };
+    localStorage.setItem(`feeder_${feederId}`, JSON.stringify(state));
   };
 
+  // Gérer la fin de la collecte
+  const handleCompleteCollection = () => {
+    setFeederStatus("pending");
+    saveFeederState("pending", null, null);
+    toast.success("Collecte terminée. Le départ est maintenant en attente de traitement.");
+  };
+
+  // Gérer l'assignation d'un agent
+  const handleAssign = async (agentId: string, agentName: string) => {
+    setIsAssigning(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setAssignedAgent({ id: agentId, name: agentName });
+      setFeederStatus("pending");
+      saveFeederState("pending", { id: agentId, name: agentName }, null);
+      toast.success(`Départ ${feederName} assigné à ${agentName}`);
+      setIsAssignDialogOpen(false);
+    } catch (error) {
+      toast.error("Erreur lors de l'assignation");
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  // Gérer le début du traitement (uniquement si l'agent assigné est l'utilisateur connecté)
   const handleStartTreatment = () => {
+    if (!currentUser) {
+      toast.error("Utilisateur non identifié");
+      return;
+    }
+    
+    if (!assignedAgent || assignedAgent.id !== currentUser.id) {
+      toast.error("Vous n'êtes pas l'agent assigné à ce départ");
+      return;
+    }
+    
     const now = Date.now();
-    setIsTreatmentActive(true);
+    setFeederStatus("processing");
     setTreatmentStartTime(now);
-    saveTreatmentState(true, now);
+    saveFeederState("processing", assignedAgent, now);
     toast.success("Traitement démarré, les champs sont maintenant modifiables");
   };
 
-  const handleStopTreatment = () => {
-    setIsTreatmentActive(false);
+  // Gérer la fin du traitement - Version avec suppression complète
+const handleStopTreatment = () => {
+  
+  try {
+    // 1. Supprimer l'état du feeder
+    localStorage.removeItem(`feeder_${feederId}`);
+    
+    // 2. Supprimer aussi les données de traitement si vous en avez d'autres
+    // (optionnel) Supprimer tous les items liés à ce feeder
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.includes(`treatment_${feederId}`)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+    
+    // 3. Réinitialiser tous les états
+    setFeederStatus("collecting");
+    setAssignedAgent(null);
     setTreatmentStartTime(null);
-    saveTreatmentState(false, null);
-    toast.success("Traitement terminé");
+    setTreatment({});
+    
+    // 4. Réinitialiser le filtre actif (optionnel)
+    setActiveFilter("all");
+    
+    // 5. Fermer les modals ouverts (optionnel)
+    setIsSheetOpen(false);
+    setIsAssignDialogOpen(false);
+    setSelectedEquipment(null);
+    
+    // 6. Afficher le message de succès
+    toast.success(
+      "Traitement terminé !.",
+      { duration: 4000 }
+    );
+    
+    // 7. Optionnel: recharger la page pour un état complètement frais
+    // setTimeout(() => window.location.reload(), 2000);
+    
+  } catch (error) {
+    console.error("Erreur lors de la réinitialisation:", error);
+    toast.error("Une erreur est survenue lors de la réinitialisation");
+  }
+};
+
+  // Déterminer quel badge afficher
+  const getStatusBadge = () => {
+    switch (feederStatus) {
+      case "collecting":
+        return <Badge className="bg-blue-100 text-blue-700 border-blue-200">En cours de collecte</Badge>;
+      case "pending":
+        return <Badge className="bg-amber-100 text-amber-700 border-amber-200">En attente de traitement</Badge>;
+      case "processing":
+        return <Badge className="bg-green-100 text-green-700 border-green-200">En cours de traitement</Badge>;
+      default:
+        return null;
+    }
+  };
+
+  // Déterminer les boutons à afficher
+  const renderActionButtons = () => {
+    if (feederStatus === "collecting") {
+      return (
+        <Button onClick={handleCompleteCollection} className="gap-2 bg-blue-600 hover:bg-blue-700">
+          <Check className="h-4 w-4" />
+          Collecte terminée
+        </Button>
+      );
+    }
+    
+    if (feederStatus === "pending") {
+      // Si aucun agent assigné, afficher le bouton d'assignation
+      if (!assignedAgent) {
+        return (
+          <Button onClick={handleOpenAssignDialog} className="gap-2 bg-purple-600 hover:bg-purple-700">
+            <UserCheck className="h-4 w-4" />
+            Assigner à un agent
+          </Button>
+        );
+      }
+      // Si l'agent assigné est l'utilisateur connecté, afficher le bouton "Débuter le traitement"
+      if (currentUser && assignedAgent.id === currentUser.id) {
+        return (
+          <Button onClick={handleStartTreatment} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+            <Play className="h-4 w-4" />
+            Débuter le traitement
+          </Button>
+        );
+      }
+      // Sinon, ne rien afficher (ou afficher un message que l'agent est déjà assigné)
+      return null;
+    }
+    
+    if (feederStatus === "processing") {
+      return (
+        <Button onClick={handleStopTreatment} variant="outline" className="gap-2 border-red-300 text-red-600 hover:bg-red-600 hover:text-white">
+          <X className="h-4 w-4" />
+          Terminer le traitement
+        </Button>
+      );
+    }
+    
+    return null;
   };
 
   // Récupérer tous les équipements du feeder
@@ -990,13 +1174,9 @@ export default function FeederProcessingPage() {
   }, []);
 
   const handleEquipmentClick = useCallback((equipment: EquipmentDetail) => {
-    if (!isTreatmentActive) {
-      toast.warning("Veuillez démarrer le traitement pour modifier les équipements");
-      return;
-    }
     setSelectedEquipment(equipment);
     setIsSheetOpen(true);
-  }, [isTreatmentActive]);
+  }, []);
 
   const handleEquipmentSave = useCallback((equipment: EquipmentDetail, updatedData: Record<string, unknown>) => {
     console.log("Sauvegarde équipement:", equipment.id, updatedData);
@@ -1004,10 +1184,6 @@ export default function FeederProcessingPage() {
   }, []);
 
   const handleMapMarkerClick = useCallback((equipment: any) => {
-    if (!isTreatmentActive) {
-      toast.warning("Veuillez démarrer le traitement pour modifier les équipements");
-      return;
-    }
     const equipmentDetail: EquipmentDetail = {
       id: String(equipment.m_rid),
       mrid: equipment.m_rid,
@@ -1022,7 +1198,7 @@ export default function FeederProcessingPage() {
     };
     setSelectedEquipment(equipmentDetail);
     setIsSheetOpen(true);
-  }, [allAnomalies, isTreatmentActive]);
+  }, [allAnomalies]);
 
   const fetchProcessingAgents = async () => {
     try {
@@ -1039,19 +1215,6 @@ export default function FeederProcessingPage() {
   const handleOpenAssignDialog = async () => {
     await fetchProcessingAgents();
     setIsAssignDialogOpen(true);
-  };
-
-  const handleAssign = async (agentId: string, agentName: string) => {
-    setIsAssigning(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      toast.success(`Départ ${feederName} assigné à ${agentName}`);
-      setIsAssignDialogOpen(false);
-    } catch (error) {
-      toast.error("Erreur lors de l'assignation");
-    } finally {
-      setIsAssigning(false);
-    }
   };
 
   const allTreated = useMemo(
@@ -1078,15 +1241,28 @@ export default function FeederProcessingPage() {
     })).filter(group => group.hasContent);
   }, [anomaliesByTable, activeFilter]);
 
+  // Les équipements sont toujours cliquables, mais la modification n'est possible qu'en mode traitement
+  const isClickable = true; // Toujours cliquable pour voir les détails
+  const isEditAllowed = isTreatmentActive && currentUser && assignedAgent && assignedAgent.id === currentUser.id;
+
   return (
     <div className="w-full min-w-0 space-y-4 md:px-4 md:py-4 sm:px-6">
 
-      {/* En-tête avec boutons assigner et débuter traitement */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      {/* En-tête avec badge et boutons */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-primary shrink-0" />
-            <h1 className="text-lg font-bold truncate sm:text-xl">{feederName}</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary shrink-0" />
+              <h1 className="text-lg font-bold truncate sm:text-xl">{feederName}</h1>
+            </div>
+            {getStatusBadge()}
+            {assignedAgent && feederStatus !== "collecting" && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/30 px-2 py-1 rounded-full">
+                <User className="h-3 w-3" />
+                <span>Assigné à: <span className="font-medium text-foreground">{assignedAgent.name}</span></span>
+              </div>
+            )}
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">
             Traitement · <span className="font-medium text-foreground">{allEquipments.length}</span> équipements ·{" "}
@@ -1094,32 +1270,12 @@ export default function FeederProcessingPage() {
           </p>
         </div>
         <div className="flex flex-col md:flex-row gap-2 shrink-0">
-          <Button variant="outline" onClick={handleOpenAssignDialog} className="gap-2 cursor-pointer">
-            <UserCheck className="h-4 w-4" />
-            Assigner à un agent
-          </Button>
-          {!isTreatmentActive ? (
-            <Button onClick={handleStartTreatment} className="gap-2 bg-emerald-600 hover:bg-emerald-700 hover:text-white cursor-pointer">
-              <Play className="h-4 w-4" />
-              Débuter le traitement
-            </Button>
-          ) : (
-            <Button onClick={handleStopTreatment} variant="outline" className="gap-2 border-red-300 text-red-600 cursor-pointer hover:bg-red-600 hover:text-white">
-              <X className="h-4 w-4" />
-              Terminer le traitement
-            </Button>
+          {renderActionButtons()}
+          {feederStatus === "processing" && treatmentStartTime && (
+            <TimerDisplay startTime={treatmentStartTime} />
           )}
-
-                {/* Timer */}
-          {isTreatmentActive && treatmentStartTime && (
-            <div className="flex">
-              <TimerDisplay startTime={treatmentStartTime} />
-            </div>
-          )}
-
         </div>
       </div>
-
 
       {/* KPI Cards avec filtres */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 sm:gap-3">
@@ -1203,7 +1359,7 @@ export default function FeederProcessingPage() {
             onMarkTreated={handleMarkTreated}
             onEquipmentClick={handleEquipmentClick} 
             defaultOpen={idx === 0}
-            isTreatmentActive={isTreatmentActive}
+            isClickable={isClickable}
           />
         ))}
       </div>
@@ -1217,6 +1373,7 @@ export default function FeederProcessingPage() {
         treatment={treatment}
         onFieldChange={handleFieldChange}
         isTreatmentActive={isTreatmentActive}
+        isTreatmentAllowed={isEditAllowed}
       />
 
       {/* Dialog d'assignation */}
@@ -1227,6 +1384,7 @@ export default function FeederProcessingPage() {
         feederName={feederName}
         processingAgents={processingAgents}
         isAssigning={isAssigning}
+        currentUser={currentUser}
       />
     </div>
   );
