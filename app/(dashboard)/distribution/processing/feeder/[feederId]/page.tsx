@@ -48,6 +48,7 @@ import { User as UserType } from "@/lib/api/types";
 import { layer1DB } from "@/data/layer1";
 import { layer2DB } from "@/data/layer2";
 import { EquipmentRecord } from "@/components/distribution/feeder-map";
+import { useRoleGuard } from "@/hooks/use-role-guard";
 
 // ─── Leaflet client-only ──────────────────────────────────────────────────────
 const FeederMap = dynamic(
@@ -251,6 +252,7 @@ function AssignDialog({
           <Button variant="outline" className="flex-1" onClick={onClose} disabled={isAssigning}>
             Annuler
           </Button>
+          
           <Button
             onClick={handleAssign}
             disabled={isAssigning || !selectedAgentId || processingAgents.length === 0}
