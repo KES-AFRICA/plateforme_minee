@@ -60,8 +60,8 @@ function makeSVGIcon(eq: EquipmentRecord, L: any): any {
   // Label central selon le type
   const typeRaw = (eq.type as string) ?? "";
   let label = "";
-  if (typeRaw === "H61") label = "61";
-  else if (typeRaw === "H59") label = "59";
+  if (typeRaw === "H61") label = "H61";
+  else if (typeRaw === "H59") label = "H59";
   else if (typeRaw) label = "S";
 
   // Forme selon le type (substation uniquement), sinon comportement original

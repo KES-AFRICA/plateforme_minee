@@ -114,9 +114,9 @@ function makeSVGIcon(eq: EquipmentRecord, L: any): any {
   
   // Label central selon le type
   let label = "";
-  if (type === "H61") label = "61";
-  else if (type === "H59") label = "59";
-  else if (type) label = type.substring(0, 2);
+  if (type === "H61") label = "H61";
+  else if (type === "H59") label = "H59";
+  else if (type) label = type.substring(0, 1);
   
   // Construction de la forme
   let shapeSvg = "";
