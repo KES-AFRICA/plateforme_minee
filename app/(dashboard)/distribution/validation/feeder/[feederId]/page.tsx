@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { useRoleGuard } from "@/hooks/use-role-guard";
 
 // ─── KPI Config (lecture seule) ───────────────────────────────────────────────
 const KPI_CONFIG = [
@@ -107,13 +108,8 @@ export default function FeederValidationPage() {
   const searchParams = useSearchParams();
   const feederId    = params?.feederId as string;
   const feederName  = searchParams?.get("name") || feederId;
+  const { canValidate } = useRoleGuard();
 
-  /**
-   * On récupère les mêmes anomalies que la page traitement.
-   * Elles contiennent layer1Record (BD1) ET layer2Record (BD2).
-   * Ici toutes sont supposées traitées (le feeder n'apparaît dans la validation
-   * que quand tout est marqué traité côté state global).
-   */
   const allAnomalies = useMemo(() => getAnomaliesByFeeder(feederId), [feederId]);
 
   const counts = useMemo(
@@ -203,15 +199,15 @@ export default function FeederValidationPage() {
       </div>
 
       {/* Bouton validation finale */}
-      <div className="sticky bottom-4 flex justify-end pb-2">
-        <button
+      {canValidate && (
+      <button
           onClick={() => toast.success("Validation finale envoyée pour " + feederName)}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-semibold text-sm hover:bg-emerald-700 active:scale-95 transition-all shadow-lg"
         >
           <ShieldCheck className="h-4 w-4" />
           Valider définitivement ce départ
         </button>
-      </div>
+      )}
     </div>
   );
 }

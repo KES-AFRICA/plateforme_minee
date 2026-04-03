@@ -119,6 +119,7 @@ const TABLE_LABELS: Record<string, string> = {
   bay: "Bay", switch: "Switch", wire: "Wire", feeder: "Feeder", pole: "Poteau", node: "Nœud",
 };
 
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const FL: Record<string, string> = {
   name: "Nom", code: "Code", type: "Type", voltage: "Tension (kV)", active: "Actif",
@@ -607,12 +608,13 @@ function EquipmentCard({ equipment, onEquipmentClick, isClickable }: {
 }
 
 // ─── Carte d'anomalie ─────────────────────────────────────────────────────────
-function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquipmentClick, isClickable }: {
+function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquipmentClick, isClickable, canProcess }: {
   anomaly: AnomalyCase; treatment: TreatmentState;
   onFieldChange: (id: string, field: string, val: string) => void;
   onMarkTreated: (id: string) => void;
   onEquipmentClick?: (equipment: EquipmentDetail) => void;
   isClickable: boolean;
+  canProcess: boolean;
 }) {
   const t = treatment[anomaly.id];
   const isTreated = t?.treated ?? false;
@@ -679,7 +681,7 @@ function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquip
             </div>
           ))}
         </div>
-        {!isTreated && isClickable && (
+        {!isTreated && isClickable && canProcess && (
           <div className="flex justify-end pt-2 mt-2 border-t border-border/40">
             <button 
               onClick={(e) => { e.stopPropagation(); onMarkTreated(anomaly.id); }}
@@ -695,7 +697,7 @@ function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquip
 }
 
 // ─── Groupe par table avec filtrage amélioré ─────────────────────────────────
-function TableGroup({ table, allAnomalies, allGoodEquipments, filter, treatment, onFieldChange, onMarkTreated, onEquipmentClick, defaultOpen, isClickable }: {
+function TableGroup({ table, allAnomalies, allGoodEquipments, filter, treatment, onFieldChange, onMarkTreated, onEquipmentClick, defaultOpen, isClickable, canProcess }: {
   table: string; 
   allAnomalies: AnomalyCase[]; 
   allGoodEquipments: EquipmentDetail[];
@@ -706,6 +708,7 @@ function TableGroup({ table, allAnomalies, allGoodEquipments, filter, treatment,
   onEquipmentClick?: (equipment: EquipmentDetail) => void;
   defaultOpen: boolean;
   isClickable: boolean;
+  canProcess: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const Icon = TABLE_ICONS[table] || Box;
@@ -751,6 +754,7 @@ function TableGroup({ table, allAnomalies, allGoodEquipments, filter, treatment,
               onMarkTreated={onMarkTreated}
               onEquipmentClick={onEquipmentClick}
               isClickable={isClickable}
+              canProcess={canProcess}
             />
           ))}
           
@@ -822,6 +826,9 @@ export default function FeederProcessingPage() {
   const searchParams = useSearchParams();
   const feederId = params?.feederId as string;
   const feederName = searchParams?.get("name") || feederId;
+
+  // Récupération des permissions
+  const { canProcess, canAssign, canCompleteCollection } = useRoleGuard();
 
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [treatment, setTreatment] = useState<TreatmentState>({});
@@ -977,37 +984,37 @@ export default function FeederProcessingPage() {
   // Déterminer les boutons à afficher
   const renderActionButtons = () => {
     if (feederStatus === "collecting") {
-      return (
+      return canCompleteCollection ? (
         <Button onClick={handleCompleteCollection} className="gap-2 bg-blue-600 hover:bg-blue-700">
           <Check className="h-4 w-4" />
-          Terminer la collecte 
+          Terminer la collecte
         </Button>
-      );
+      ) : null;
     }
     
     if (feederStatus === "pending") {
-      // Si aucun agent assigné, afficher le bouton d'assignation
       if (!assignedAgent) {
-        return (
+        return canAssign ? (
           <Button onClick={handleOpenAssignDialog} className="gap-2 bg-purple-600 hover:bg-purple-700">
             <UserCheck className="h-4 w-4" />
             Assigner à un agent
           </Button>
-        );
+        ) : null;
       }
       
-      // Afficher les deux boutons: réassigner et débuter le traitement
       return (
         <div className="flex gap-2">
-          <Button 
-            onClick={handleOpenReassignDialog} 
-            variant="outline" 
-            className="gap-2 border-purple-300 text-white bg-purple-800 hover:bg-purple-800 cursor-pointer"   
-          >
-            <RefreshCw className="h-4 w-4" />
-            Assigner un autre agent
-          </Button>
-          {currentUser && assignedAgent.id === currentUser.id && (
+          {canAssign && (
+            <Button 
+              onClick={handleOpenReassignDialog} 
+              variant="outline" 
+              className="gap-2 border-purple-300 text-white bg-purple-800 hover:bg-purple-800 cursor-pointer"   
+            >
+              <RefreshCw className="h-4 w-4" />
+              Assigner un autre agent
+            </Button>
+          )}
+          {currentUser && assignedAgent.id === currentUser.id && canProcess && (
             <Button onClick={handleStartTreatment} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
               <Play className="h-4 w-4" />
               Débuter le traitement
@@ -1018,12 +1025,12 @@ export default function FeederProcessingPage() {
     }
     
     if (feederStatus === "processing") {
-      return (
+      return canProcess ? (
         <Button onClick={handleStopTreatment} variant="outline" className="gap-2 border-red-300 text-red-600 hover:bg-red-600 hover:text-white">
           <X className="h-4 w-4" />
           Terminer le traitement
         </Button>
-      );
+      ) : null;
     }
     
     return null;
@@ -1378,6 +1385,7 @@ export default function FeederProcessingPage() {
             onEquipmentClick={handleEquipmentClick} 
             defaultOpen={idx === 0}
             isClickable={isClickable}
+            canProcess={canProcess} 
           />
         ))}
       </div>

@@ -51,6 +51,9 @@ export function useRoleGuard() {
   /** Peut exporter des données */
   const canExport    = can(PERMISSIONS.EXPORT_DATA);
 
+  /**Peut completer la collecte */
+  const canCompleteCollection = can(PERMISSIONS.ACTION_COMPLETE_COLLECTION);
+
   return {
     user,
     can,
@@ -67,5 +70,6 @@ export function useRoleGuard() {
     canAssign,
     canManageUsers,
     canExport,
+    canCompleteCollection
   };
 }

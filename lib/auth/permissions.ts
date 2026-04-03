@@ -32,19 +32,17 @@ export const PERMISSIONS = {
   VIEW_NOTIFICATIONS:   "view:notifications",
   VIEW_SETTINGS:        "view:settings",
 
-  // Actions métier — Traitement
-  ACTION_PROCESS_TASK:  "action:process_task",      // Traiter une anomalie
-  ACTION_ASSIGN_TASK:   "action:assign_task",        // Assigner/réassigner une tâche
-  ACTION_COMPLETE_COLLECTION: "action:complete_collection", // Marquer collecte terminée
 
-  // Actions métier — Validation
-  ACTION_VALIDATE_TASK: "action:validate_task",      // Valider un départ
-  ACTION_REJECT_TASK:   "action:reject_task",        // Rejeter un départ
+  ACTION_PROCESS_TASK:  "action:process_task",      
+  ACTION_ASSIGN_TASK:   "action:assign_task",       
+  ACTION_COMPLETE_COLLECTION: "action:complete_collection", 
 
-  // Gestion utilisateurs (admin uniquement)
+  ACTION_VALIDATE_TASK: "action:validate_task",      
+  ACTION_REJECT_TASK:   "action:reject_task",      
+
+
   MANAGE_USERS:         "manage:users",
 
-  // Export
   EXPORT_DATA:          "export:data",
 } as const;
 
@@ -53,11 +51,7 @@ export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS];
 // ─── Matrice rôle → permissions ───────────────────────────────────────────────
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
-  /**
-   * ADMIN
-   * Vision complète en lecture. Gestion des utilisateurs.
-   * Aucune action sur le processus métier (traitement, validation).
-   */
+
   admin: [
     PERMISSIONS.VIEW_DASHBOARD,
     PERMISSIONS.VIEW_DISTRIBUTION,
@@ -88,10 +82,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     PERMISSIONS.EXPORT_DATA,
   ],
 
-  /**
-   * AGENT DE VALIDATION
-   * Dashboard + Validation Distribution + Commercial + Notifications.
-   */
   validation_agent: [
     PERMISSIONS.VIEW_DASHBOARD,
     PERMISSIONS.VIEW_DISTRIBUTION,
@@ -102,13 +92,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     PERMISSIONS.VIEW_SETTINGS,
     PERMISSIONS.ACTION_VALIDATE_TASK,
     PERMISSIONS.ACTION_REJECT_TASK,
-    PERMISSIONS.ACTION_PROCESS_TASK
+    PERMISSIONS.ACTION_PROCESS_TASK,
   ],
 
-  /**
-   * AGENT DE TRAITEMENT
-   * Dashboard + Traitements assignés + Notifications.
-   */
   processing_agent: [
     PERMISSIONS.VIEW_DASHBOARD,
     PERMISSIONS.VIEW_DISTRIBUTION,
@@ -121,25 +107,14 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
 
 // ─── Helpers purs (utilisables hors React) ───────────────────────────────────
 
-/**
- * Vérifie si un rôle possède une permission donnée.
- * Utilitaire pur — pas de hook, utilisable côté serveur aussi.
- */
 export function roleHasPermission(role: UserRole, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
 }
 
-/**
- * Retourne toutes les permissions d'un rôle.
- */
 export function getPermissionsForRole(role: UserRole): Permission[] {
   return ROLE_PERMISSIONS[role] ?? [];
 }
 
-/**
- * Vérifie si un rôle peut voir une route donnée.
- * Map route prefix → permission requise.
- */
 const ROUTE_PERMISSION_MAP: Record<string, Permission> = {
   "/dashboard":                     PERMISSIONS.VIEW_DASHBOARD,
   "/distribution":                  PERMISSIONS.VIEW_DISTRIBUTION,
@@ -163,9 +138,7 @@ export function getRequiredPermissionForRoute(pathname: string): Permission | nu
   return null;
 }
 
-/**
- * Retourne la route de redirection par défaut selon le rôle.
- */
+
 export function getDefaultRouteForRole(role: UserRole): string {
   switch (role) {
     case "admin":            return "/dashboard";
