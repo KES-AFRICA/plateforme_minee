@@ -29,6 +29,8 @@ import { Separator } from "@/components/ui/separator";
 import { usePostesMap, usePosteDetailLazy } from "@/hooks/useKobo";
 import { buildPhotoUrl } from "@/lib/api/services/koboService";
 import { PosteDetail } from "@/lib/types/kobo";
+import { DateFilter } from "@/components/dashboard/date-filter";
+import { DateRange, DateRangeType, useDateFilter } from "@/hooks/use-date-filter-map";
 
 
 // ── Leaflet client-only ───────────────────────────────────────────────────────
@@ -92,14 +94,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 // ── Composant PhotoModal ───────────────────────────────────────────────────────
-// CORRECTIONS :
-//   1. Le conteneur principal n'a plus d'onClick → la fermeture se fait
-//      uniquement via les boutons dédiés (évite la fermeture accidentelle
-//      qui remontait jusqu'au DetailSheet).
-//   2. Les contrôles (zoom + fermer) sont enveloppés dans un div avec
-//      style={{ zIndex: 10001, pointerEvents: "auto" }} et un
-//      e.stopPropagation() sur le groupe, garantissant qu'ils restent
-//      cliquables même si un élément parent absorbe les événements.
 export function PhotoModal({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
   const [mounted, setMounted] = useState(false);
   const [scale, setScale] = useState(1);
@@ -171,8 +165,6 @@ export function PhotoModal({ src, alt, onClose }: { src: string; alt: string; on
   if (!mounted) return null;
 
   const modalContent = (
-    // ✅ FIX 1 — plus d'onClick sur le fond : on ne ferme plus par clic
-    // accidentel, ce qui évitait de remonter la fermeture au DetailSheet.
     <div
       ref={containerRef}
       className="fixed inset-0 bg-black/95 flex items-center justify-center"
@@ -181,14 +173,11 @@ export function PhotoModal({ src, alt, onClose }: { src: string; alt: string; on
       onMouseUp={handleMouseUp}
       onWheel={handleWheel}
     >
-      {/* ✅ FIX 2 — les contrôles ont leur propre stacking context et
-          stoppent la propagation ; ils restent cliquables quoi qu'il arrive */}
       <div
         className="absolute top-4 right-4 flex items-center gap-2"
         style={{ zIndex: 10001, pointerEvents: "auto" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Zoom out */}
         <button
           onClick={handleZoomOut}
           className="text-white hover:text-gray-300 transition-colors bg-black/50 rounded-full p-2"
@@ -197,7 +186,6 @@ export function PhotoModal({ src, alt, onClose }: { src: string; alt: string; on
           <ZoomOut className="h-6 w-6" />
         </button>
 
-        {/* Zoom in */}
         <button
           onClick={handleZoomIn}
           className="text-white hover:text-gray-300 transition-colors bg-black/50 rounded-full p-2"
@@ -206,7 +194,6 @@ export function PhotoModal({ src, alt, onClose }: { src: string; alt: string; on
           <ZoomIn className="h-6 w-6" />
         </button>
 
-        {/* Reset 1:1 */}
         <button
           onClick={handleReset}
           className="text-white hover:text-gray-300 transition-colors bg-black/50 rounded-full p-2 text-xs font-medium min-w-[36px]"
@@ -215,7 +202,6 @@ export function PhotoModal({ src, alt, onClose }: { src: string; alt: string; on
           1:1
         </button>
 
-        {/* Fermer (croix) — dans le même groupe, même z-index */}
         <button
           onClick={onClose}
           className="text-white hover:text-gray-300 transition-colors bg-black/50 rounded-full p-2"
@@ -225,7 +211,6 @@ export function PhotoModal({ src, alt, onClose }: { src: string; alt: string; on
         </button>
       </div>
 
-      {/* Zone image — draggable quand zoomé */}
       <div
         className="relative w-full h-full flex items-center justify-center overflow-hidden"
         onMouseDown={handleMouseDown}
@@ -246,14 +231,11 @@ export function PhotoModal({ src, alt, onClose }: { src: string; alt: string; on
         />
       </div>
 
-      {/* Barre du bas — fermer + indicateur de zoom */}
       <div
         className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2"
         style={{ zIndex: 10001, pointerEvents: "auto" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ✅ FIX — stopPropagation sur ce bouton aussi pour ne pas
-            remonter jusqu'au Sheet parent */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -297,7 +279,6 @@ export function PhotoThumb({ src, alt }: { src: string | null | undefined; alt: 
         className="relative w-full h-64 rounded-lg overflow-hidden border bg-gray-500/20 cursor-pointer hover:opacity-90 transition-opacity"
         onClick={handleClick}
       >
-        {/* Skeleton */}
         <div className="absolute inset-0 z-10 overflow-hidden">
           <div className="absolute inset-0 animate-pulse bg-gray-500/10" />
           <div className="absolute z-10 inset-0 flex flex-col items-center justify-center gap-2">
@@ -360,7 +341,6 @@ function DetailSheet({
         side="right"
         className="w-screen! sm:w-130! max-w-none! sm:max-w-130! flex flex-col p-0 overflow-hidden"
       >
-        {/* Header */}
         <SheetHeader className="px-5 py-4 border-b shrink-0">
           <div className="flex items-center gap-2">
             <Building2 className="h-5 w-5 text-blue-500" />
@@ -375,9 +355,7 @@ function DetailSheet({
           </SheetDescription>
         </SheetHeader>
 
-        {/* Corps */}
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
-
           {loading && (
             <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin" />
@@ -394,10 +372,8 @@ function DetailSheet({
 
           {poste && !loading && (
             <>
-              {/* Photo principale */}
               <PhotoThumb src={poste.photos.photo_poste} alt="Photo du poste" />
 
-              {/* Identification */}
               <Section title="Identification">
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Substation id"   value={poste.substation_id} />
@@ -423,7 +399,6 @@ function DetailSheet({
                 </div>
               </Section>
 
-              {/* Appareillage */}
               <Section title="Appareillage HTA">
                 <PhotoThumb
                   src={poste.appareillage.photo_appareillage}
@@ -440,7 +415,6 @@ function DetailSheet({
                 </div>
               </Section>
 
-              {/* Transformateurs */}
               {poste.transformateurs.length > 0 && (
                 <Section title={`Transformateurs (${poste.transformateurs.length})`}>
                   {poste.transformateurs.map((t, i) => (
@@ -465,7 +439,6 @@ function DetailSheet({
                 </Section>
               )}
 
-              {/* Cellules HTA */}
               {poste.cellules.length > 0 && (
                 <Section title={`Cellules HTA (${poste.cellules.length})`}>
                   {poste.cellules.map((c, i) => (
@@ -499,7 +472,6 @@ function DetailSheet({
                 </Section>
               )}
 
-              {/* Tableaux BT */}
               {poste.bt_boards.length > 0 && (
                 <Section title={`Tableaux BT (${poste.bt_boards.length})`}>
                   {poste.bt_boards.map((bt, i) => (
@@ -515,7 +487,6 @@ function DetailSheet({
                 </Section>
               )}
 
-              {/* Client commercial */}
               {poste.client_commercial && (
                 <Section title="Client commercial">
                   <div className="grid grid-cols-2 gap-3">
@@ -533,7 +504,6 @@ function DetailSheet({
                 </Section>
               )}
 
-              {/* Génie civil */}
               {poste.genie_civil && (
                 <Section title="Génie civil">
                   <div className="grid grid-cols-2 gap-3">
@@ -558,7 +528,6 @@ function DetailSheet({
                 </Section>
               )}
 
-              {/* Métadonnées */}
               <Section title="Métadonnées">
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="ID Kobo"       value={String(poste.meta.kobo_id ?? "")} />
@@ -598,12 +567,22 @@ export default function MapPage() {
   const [selectedRegime,       setSelectedRegime]       = useState("all");
   const [searchQuery,          setSearchQuery]          = useState("");
 
+  // ── Filtre date ───────────────────────────────────────────────────────────
+  const {
+    dateRangeType,
+    dateRange,
+    setDateRangeType,
+    setCustomRange,
+  } = useDateFilter();
+
   // ── Filtrage des postes ───────────────────────────────────────────────────
   const filteredPostes = useMemo(() => {
     return postes.filter((p) => {
-      if (selectedType         !== "all" && p.type         !== selectedType)         return false;
+      // Filtres existants
+      if (selectedType !== "all" && p.type !== selectedType) return false;
       if (selectedExploitation !== "all" && p.exploitation !== selectedExploitation) return false;
-      if (selectedRegime       !== "all" && p.regime_poste !== selectedRegime)       return false;
+      if (selectedRegime !== "all" && p.regime_poste !== selectedRegime) return false;
+      
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         if (
@@ -615,9 +594,24 @@ export default function MapPage() {
         )
           return false;
       }
+      
+      // Filtre par date (si ce n'est pas "all")
+      if (dateRangeType !== "all" && p.submission_time) {
+        const submissionDate = new Date(p.submission_time);
+        const startDate = new Date(dateRange.start);
+        const endDate = new Date(dateRange.end);
+        
+        // Ajuster les heures pour inclure toute la journée de fin
+        endDate.setHours(23, 59, 59, 999);
+        
+        if (submissionDate < startDate || submissionDate > endDate) {
+          return false;
+        }
+      }
+      
       return true;
     });
-  }, [postes, selectedType, selectedExploitation, selectedRegime, searchQuery]);
+  }, [postes, selectedType, selectedExploitation, selectedRegime, searchQuery, dateRangeType, dateRange]);
 
   // ── Conversion pour FullscreenMap ─────────────────────────────────────────
   const mapPoints = useMemo(
@@ -663,13 +657,15 @@ export default function MapPage() {
     setSelectedExploitation("all");
     setSelectedRegime("all");
     setSearchQuery("");
+    setDateRangeType("all"); // Reset to "all time"
   };
 
   const hasActiveFilters =
     selectedType         !== "all" ||
     selectedExploitation !== "all" ||
     selectedRegime       !== "all" ||
-    searchQuery          !== "";
+    searchQuery          !== "" ||
+    dateRangeType        !== "all";
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
   return (
@@ -726,107 +722,145 @@ export default function MapPage() {
       </div>
 
       {/* Panneau de filtres */}
-      <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen} className="shrink-0">
-        <CollapsibleContent>
-          <div className="bg-muted/30 border-b p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+<Collapsible open={filtersOpen} onOpenChange={setFiltersOpen} className="shrink-0">
+  <CollapsibleContent>
+    <div className="bg-muted/30 border-b p-4">
+      {/* Grille responsive avec des largeurs flexibles */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        
+        {/* Recherche */}
+        <div className="space-y-2 min-w-0"> {/* min-w-0 empêche le débordement */}
+          <Label className="text-xs font-semibold uppercase tracking-wider flex items-center gap-1">
+            <Search className="h-3 w-3" />
+            Recherche
+          </Label>
+          <Input
+            placeholder="Substation, feeder…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-9 w-full"
+          />
+        </div>
 
-              {/* Recherche */}
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold uppercase tracking-wider">
-                  <Search className="h-3 w-3 inline mr-1" />
-                  Recherche
-                </Label>
-                <Input
-                  placeholder="Substation, feeder…"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-9"
+        {/* Type de poste */}
+        <div className="space-y-2 min-w-0">
+          <Label className="text-xs font-semibold uppercase tracking-wider">Type de poste</Label>
+          <Select value={selectedType} onValueChange={setSelectedType}>
+            <SelectTrigger className="h-9 w-full">
+              <SelectValue placeholder="Tous" />
+            </SelectTrigger>
+            <SelectContent className="min-w-50">
+              <SelectItem value="all">Tous</SelectItem>
+              {TYPES_POSTE.map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Exploitation */}
+        <div className="space-y-2 min-w-0">
+          <Label className="text-xs font-semibold uppercase tracking-wider">Exploitation</Label>
+          <Select value={selectedExploitation} onValueChange={setSelectedExploitation}>
+            <SelectTrigger className="h-9 w-full">
+              <SelectValue placeholder="Toutes" />
+            </SelectTrigger>
+            <SelectContent className="min-w-[200px]">
+              <SelectItem value="all">Toutes</SelectItem>
+              {EXPLOITATIONS.map((e) => (
+                <SelectItem key={e.id} value={e.id}>{e.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Régime poste */}
+        <div className="space-y-2 min-w-0">
+          <Label className="text-xs font-semibold uppercase tracking-wider">Régime poste</Label>
+          <Select value={selectedRegime} onValueChange={setSelectedRegime}>
+            <SelectTrigger className="h-9 w-full">
+              <SelectValue placeholder="Tous" />
+            </SelectTrigger>
+            <SelectContent className="min-w-[200px]">
+              <SelectItem value="all">Tous</SelectItem>
+              {REGIMES_POSTE.map((r) => (
+                <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Filtre Date */}
+        <div className="space-y-2 min-w-0 lg:col-span-2">
+          <Label className="text-xs font-semibold uppercase tracking-wider flex items-center gap-1">
+            <Calendar className="h-3 w-3" />
+            Période
+          </Label>
+          <DateFilter
+            dateRangeType={dateRangeType}
+            dateRange={dateRange}
+            onRangeTypeChange={(type: DateRangeType) => setDateRangeType(type)}
+            onCustomRangeChange={(range: DateRange) => setCustomRange(range)}
+          />
+        </div>
+      </div>
+
+      {/* Badges filtres actifs - responsive avec wrap */}
+      {hasActiveFilters && (
+        <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t">
+          <span className="text-xs text-muted-foreground shrink-0">Filtres actifs :</span>
+          <div className="flex flex-wrap gap-2">
+            {selectedType !== "all" && (
+              <Badge variant="secondary" className="text-xs gap-1">
+                {TYPES_POSTE.find((t) => t.id === selectedType)?.label}
+                <XCircle 
+                  className="h-3 w-3 cursor-pointer hover:text-destructive" 
+                  onClick={() => setSelectedType("all")} 
                 />
-              </div>
-
-              {/* Type de poste */}
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold uppercase tracking-wider">Type de poste</Label>
-                <Select value={selectedType} onValueChange={setSelectedType}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Tous" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tous</SelectItem>
-                    {TYPES_POSTE.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Exploitation */}
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold uppercase tracking-wider">Exploitation</Label>
-                <Select value={selectedExploitation} onValueChange={setSelectedExploitation}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Toutes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Toutes</SelectItem>
-                    {EXPLOITATIONS.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>{e.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Régime poste */}
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold uppercase tracking-wider">Régime poste</Label>
-                <Select value={selectedRegime} onValueChange={setSelectedRegime}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Tous" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tous</SelectItem>
-                    {REGIMES_POSTE.map((r) => (
-                      <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Badges filtres actifs */}
-            {hasActiveFilters && (
-              <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t">
-                <span className="text-xs text-muted-foreground">Filtres actifs :</span>
-                {selectedType !== "all" && (
-                  <Badge variant="secondary" className="text-xs gap-1">
-                    {TYPES_POSTE.find((t) => t.id === selectedType)?.label}
-                    <XCircle className="h-3 w-3 cursor-pointer" onClick={() => setSelectedType("all")} />
-                  </Badge>
-                )}
-                {selectedExploitation !== "all" && (
-                  <Badge variant="secondary" className="text-xs gap-1">
-                    {EXPLOITATIONS.find((e) => e.id === selectedExploitation)?.label}
-                    <XCircle className="h-3 w-3 cursor-pointer" onClick={() => setSelectedExploitation("all")} />
-                  </Badge>
-                )}
-                {selectedRegime !== "all" && (
-                  <Badge variant="secondary" className="text-xs gap-1">
-                    {REGIMES_POSTE.find((r) => r.id === selectedRegime)?.label}
-                    <XCircle className="h-3 w-3 cursor-pointer" onClick={() => setSelectedRegime("all")} />
-                  </Badge>
-                )}
-                {searchQuery && (
-                  <Badge variant="secondary" className="text-xs gap-1">
-                    Recherche : {searchQuery}
-                    <XCircle className="h-3 w-3 cursor-pointer" onClick={() => setSearchQuery("")} />
-                  </Badge>
-                )}
-              </div>
+              </Badge>
+            )}
+            {selectedExploitation !== "all" && (
+              <Badge variant="secondary" className="text-xs gap-1">
+                {EXPLOITATIONS.find((e) => e.id === selectedExploitation)?.label}
+                <XCircle 
+                  className="h-3 w-3 cursor-pointer hover:text-destructive" 
+                  onClick={() => setSelectedExploitation("all")} 
+                />
+              </Badge>
+            )}
+            {selectedRegime !== "all" && (
+              <Badge variant="secondary" className="text-xs gap-1">
+                {REGIMES_POSTE.find((r) => r.id === selectedRegime)?.label}
+                <XCircle 
+                  className="h-3 w-3 cursor-pointer hover:text-destructive" 
+                  onClick={() => setSelectedRegime("all")} 
+                />
+              </Badge>
+            )}
+            {searchQuery && (
+              <Badge variant="secondary" className="text-xs gap-1">
+                Recherche : {searchQuery}
+                <XCircle 
+                  className="h-3 w-3 cursor-pointer hover:text-destructive" 
+                  onClick={() => setSearchQuery("")} 
+                />
+              </Badge>
+            )}
+            {dateRangeType !== "all" && (
+              <Badge variant="secondary" className="text-xs gap-1">
+                Période: {dateRangeType === "today" ? "Aujourd'hui" : dateRangeType === "week" ? "Cette semaine" : dateRangeType === "month" ? "Ce mois" : "Personnalisé"}
+                <XCircle 
+                  className="h-3 w-3 cursor-pointer hover:text-destructive" 
+                  onClick={() => setDateRangeType("all")} 
+                />
+              </Badge>
             )}
           </div>
-        </CollapsibleContent>
-      </Collapsible>
+        </div>
+      )}
+    </div>
+  </CollapsibleContent>
+</Collapsible>
 
       {/* Carte */}
       <div className="flex-1 min-h-0 relative">

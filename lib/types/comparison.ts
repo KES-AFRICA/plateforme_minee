@@ -6,13 +6,11 @@ export interface AnomalyItem {
   table: string;
   mrid: string;
   name: string | null;
-  // Pour tous les types, on peut avoir des données
-  data?: Record<string, any>;  // ← Ajoute ce champ universel
+  data?: Record<string, any>;
   reference_data?: Record<string, any>;
   collected_data?: Record<string, any>;
-  duplicate_occurrences?: any[];
-  divergent_fields?: { field: string; reference_value: any; collected_value: any }[];
-  
+  duplicate_occurrences?: DuplicateOccurrence[];
+  divergent_fields?: DivergentField[];
 }
 
 export interface EquipmentDetail {
@@ -25,7 +23,6 @@ export interface EquipmentDetail {
   photo?: string | null;
   location?: { lat: number; lng: number };
 }
-
 
 // Types pour l'arborescence des feeders
 export interface FeederTreeFeeder {
@@ -70,7 +67,7 @@ export interface FeedersSourceResponse {
 // TYPES POUR /comparison/compare/{feeder_id}
 // ============================================================
 
-export type AnomalyType = "duplicate" | "divergence" | "new" | "missing" | "complex";
+export type AnomalyType = "ok" | "duplicate" | "divergence" | "new" | "missing" | "complex";
 
 export type TableName = 
   | "feeder"
@@ -91,28 +88,51 @@ export interface DuplicateOccurrence {
   m_rid: string;
   name: string | null;
   substations_m_rid: string | null;
+  full_record?: Record<string, any>;
 }
 
 export interface Duplicate {
+  duplicate_type?: "same_mrid" | "same_name";
+  key?: string;
   count: number;
   occurrences: DuplicateOccurrence[];
 }
 
 export interface Divergence {
   mrid: string;
+  name?: string;
   reference_data: Record<string, any>;
   collected_data: Record<string, any>;
   divergent_fields: DivergentField[];
 }
 
+export interface NewItem {
+  m_rid: string;
+  name: string | null;
+  full_record?: Record<string, any>;
+}
+
+export interface MissingItem {
+  m_rid: string;
+  name: string | null;
+  full_record?: Record<string, any>;
+}
+
+// ✅ MODIFICATION : OkItem avec data (toutes les données)
+export interface OkItem {
+  mrid: string;
+  name?: string | null;
+  data?: Record<string, any>;  // ← Toutes les données de l'équipement
+}
+
 export interface TableComparisonResult {
- reference: Record<string, any>[] | null;
+  reference: Record<string, any>[] | null;
   table: TableName;
   duplicates: Duplicate[];
-  new: Record<string, any>[];
-  missing: Record<string, any>[];
+  new: NewItem[];
+  missing: MissingItem[];
   divergences: Divergence[];
-  ok: { mrid: string; data: Record<string, any> }[];
+  ok: OkItem[];  // ← Changé pour utiliser OkItem
 }
 
 export interface FeederComparisonSummary {

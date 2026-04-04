@@ -36,7 +36,7 @@ export function DateFilter({
   className,
 }: DateFilterProps) {
   return (
-    <div className={cn("flex flex-col gap-2 w-full sm:flex-row sm:items-center sm:w-auto", className)}>
+    <div className={cn("flex flex-col gap-2 w-full sm:items-center sm:w-auto", className)}>
 
       {/* Boutons de période — scrollable horizontalement sur petit écran */}
       <div className="w-full overflow-x-auto sm:overflow-visible">

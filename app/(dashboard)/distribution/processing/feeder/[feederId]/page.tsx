@@ -67,8 +67,8 @@ const FullscreenMap = dynamic(
 );
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type AnomalyType = "duplicate" | "divergence" | "new" | "missing" | "complex";
-type EquipmentFilter = "all" | "ok" | AnomalyType;
+type AnomalyType = "ok"|"duplicate" | "divergence" | "new" | "missing" | "complex";
+type EquipmentFilter = "all" | AnomalyType;
 type FeederStatus = "collecting" | "pending" | "processing";
 
 interface TreatmentState {
@@ -86,7 +86,7 @@ interface FeederAssignment {
   treatmentStartTime?: number | null;
 }
 
-// ─── KPI Config ───────────────────────────────────────────────────────────────
+// ─── KPI Config - Les types correspondent exactement au summary du backend ───
 const KPI_CONFIG = [
   { type: "all" as const, label: "Tous", icon: Filter, color: "text-slate-600 dark:text-slate-400", bg: "bg-slate-500/10", activeBg: "bg-slate-500/15", activeBorder: "border-slate-500/50" },
   { type: "ok" as const, label: "Conformes", icon: CheckCircle2, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-500/10", activeBg: "bg-emerald-500/15", activeBorder: "border-emerald-500/50" },
@@ -106,7 +106,7 @@ const TABLE_ICONS: Record<string, React.ElementType> = {
 };
 const TABLE_LABELS: Record<string, string> = {
   substation: "Substation", powertransformer: "Transformateur", bus_bar: "Bus Bar",
-  bay: "Cellule", switch: "Interrupteur", wire: "Câble", feeder: "Départ",
+  bay: "Cellule", switch: "switch", wire: "Câble", feeder: "Départ",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -131,8 +131,6 @@ const fv = (v: unknown): string => {
   if (typeof v === "boolean") return v ? "Oui" : "Non";
   return String(v);
 };
-const recTitle = (r: Record<string, unknown> | null) =>
-  r ? String(r.name || r.local_name || r.code || r.m_rid || "—") : "—";
 
 // ─── Badge anomalie ───────────────────────────────────────────────────────────
 function AnomalyBadge({ type }: { type: AnomalyType }) {
@@ -268,6 +266,7 @@ function AssignDialog({
 }
 
 // ─── Sheet pour les détails d'équipement ──────────────────────────────────────
+// ─── Sheet pour les détails d'équipement ──────────────────────────────────────
 function EquipmentDetailSheet({
   equipment,
   isOpen,
@@ -292,12 +291,90 @@ function EquipmentDetailSheet({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenPhoto, setFullscreenPhoto] = useState<string | null>(null);
 
+  // Liste des champs à ne jamais afficher
+  const HIDDEN_FIELDS = new Set([
+    "qrcode", "precision", "photo", "exploitattion_m_rid", "collected_date",
+    "collected_agent_name", "arrondissements_m_rid", "structure_m_rid",
+    "second_switch_m_rid", "pole_m_rid"
+  ]);
+
+  // Liste des champs à désactiver même en cours de traitement
+  const DISABLED_FIELDS = new Set([
+    "latitude", "longitude"
+  ]);
+
+  // Récupérer les champs en divergence pour ce equipment
+  const divergentFieldNames = useMemo(() => {
+    const divergenceAnomaly = equipment?.anomalies.find(a => a.type === "divergence");
+    if (divergenceAnomaly && divergenceAnomaly.divergent_fields) {
+      return new Set(divergenceAnomaly.divergent_fields.map(df => df.field));
+    }
+    return new Set<string>();
+  }, [equipment]);
+
+  // Récupérer les champs des occurrences dupliquées
+  const duplicateFields = useMemo(() => {
+    const duplicateAnomaly = equipment?.anomalies.find(a => a.type === "duplicate");
+    if (duplicateAnomaly && duplicateAnomaly.duplicate_occurrences) {
+      // Prendre le premier occurrence pour avoir les champs
+      const firstOcc = duplicateAnomaly.duplicate_occurrences[0];
+      if (firstOcc && firstOcc.full_record) {
+        return Object.keys(firstOcc.full_record).filter(
+          k => !HIDDEN_FIELDS.has(k) && k !== "m_rid" && k !== "created_at" && k !== "created_date"
+        );
+      }
+    }
+    return [];
+  }, [equipment]);
+
+  // Trier les champs : ceux avec valeur d'abord, puis ceux sans valeur
+  // Et mettre les champs en divergence/doublons en premier
   const allFields = useMemo(() => {
     if (!equipment) return [];
-    return Object.keys(editedData)
-      .filter(k => k !== "m_rid" && k !== "_anomalyType" && k !== "_anomalyId" && k !== "_table" && k !== "created_date" && k !== "created_at")
-      .sort();
-  }, [equipment, editedData]);
+    
+    const data = editedData;
+    const fieldsWithValue: string[] = [];
+    const fieldsWithoutValue: string[] = [];
+    
+    // Récupérer tous les champs (sauf ceux cachés et les champs système)
+    const allFieldKeys = Object.keys(data).filter(k => 
+      !HIDDEN_FIELDS.has(k) && 
+      k !== "m_rid" && 
+      k !== "_anomalyType" && 
+      k !== "_anomalyId" && 
+      k !== "_table" && 
+      k !== "created_date" && 
+      k !== "created_at"&& 
+      k !== "structure_m_rid"&& 
+      k !== "localisation" &&   
+      k !== "description" &&    
+      k !== "observation"       
+    );
+    
+    for (const field of allFieldKeys) {
+      const value = data[field];
+      const hasValue = value !== null && value !== undefined && value !== "";
+      
+      if (hasValue) {
+        fieldsWithValue.push(field);
+      } else {
+        fieldsWithoutValue.push(field);
+      }
+    }
+    
+    // Trier : d'abord les champs en divergence/doublons, puis les autres
+    const sortByPriority = (fields: string[]) => {
+      return fields.sort((a, b) => {
+        const aIsPriority = divergentFieldNames.has(a) || duplicateFields.includes(a);
+        const bIsPriority = divergentFieldNames.has(b) || duplicateFields.includes(b);
+        if (aIsPriority && !bIsPriority) return -1;
+        if (!aIsPriority && bIsPriority) return 1;
+        return a.localeCompare(b);
+      });
+    };
+    
+    return [...sortByPriority(fieldsWithValue), ...sortByPriority(fieldsWithoutValue)];
+  }, [equipment, editedData, divergentFieldNames, duplicateFields]);
 
   useEffect(() => {
     if (equipment) {
@@ -333,13 +410,12 @@ function EquipmentDetailSheet({
       return "select";
     }
     if (field === "voltage" || field === "apparent_power" || field === "height" || 
-        field === "w1_voltage" || field === "w2_voltage" || field === "highest_voltage_level" ||
-        field === "latitude" || field === "longitude") {
+        field === "w1_voltage" || field === "w2_voltage" || field === "highest_voltage_level") {
       return "number";
     }
-    if (field === "localisation" || field === "description" || field === "observation") {
-      return "textarea";
-    }
+    // if (field === "localisation" || field === "description" || field === "observation") {
+    //   return "textarea";
+    // }
     return "text";
   };
 
@@ -392,147 +468,7 @@ function EquipmentDetailSheet({
               )}
             </div>
 
-            {/* Section anomalies */}
-            {equipment.anomalies.length > 0 && (
-              <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                <div className="flex items-center gap-2 mb-2">
-                  <AlertCircle className="h-4 w-4 text-amber-600" />
-                  <span className="font-semibold text-sm text-amber-700">Anomalie détectée</span>
-                </div>
-                {equipment.anomalies.map((anomaly) => (
-                  <div key={anomaly.id} className="text-sm space-y-1">
-                    <div className="flex items-center gap-2">
-                      <AnomalyBadge type={anomaly.type} />
-                      <span className="text-muted-foreground text-xs">ID: {anomaly.id}</span>
-                    </div>
-                    {(anomaly.type === "divergence" && anomaly.divergent_fields) && (
-                      <div className="mt-2 pt-2 border-t border-amber-500/20">
-                        <p className="text-xs font-medium">Champs en divergence :</p>
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          {anomaly.divergent_fields.slice(0, 5).map((df, idx) => (
-                            <Badge key={idx} variant="outline" className="text-[10px]">
-                              {df.field}
-                            </Badge>
-                          ))}
-                          {anomaly.divergent_fields.length > 5 && (
-                            <span className="text-[10px] text-muted-foreground">
-                              +{anomaly.divergent_fields.length - 5} autres
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {(anomaly.type === "duplicate" && anomaly.duplicate_occurrences) && (
-                      <div className="mt-2 pt-2 border-t border-amber-500/20">
-                        <p className="text-xs font-medium">Occurrences :</p>
-                        <div className="space-y-1 mt-1">
-                          {anomaly.duplicate_occurrences.slice(0, 3).map((occ, idx) => (
-                            <div key={idx} className="text-[10px] font-mono bg-muted/30 p-1 rounded">
-                              {occ.m_rid} - {occ.name}
-                            </div>
-                          ))}
-                          {anomaly.duplicate_occurrences.length > 3 && (
-                            <p className="text-[10px] text-muted-foreground">
-                              +{anomaly.duplicate_occurrences.length - 3} autres occurrences
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Localisation GPS */}
-            {equipment.location && (
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <MapPin className="h-3 w-3 inline mr-1" />
-                  Localisation GPS
-                </Label>
-                <div className="p-3 rounded-lg bg-muted/30">
-                  <p className="text-sm font-mono">
-                    {equipment.location.lat.toFixed(6)}, {equipment.location.lng.toFixed(6)}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Données de l'équipement */}
-            <div className="space-y-4">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Données de l'équipement
-              </Label>
-              
-              {allFields.map((field) => {
-                const value = editedData[field];
-                if (value === undefined) return null;
-                
-                const originalValue = equipment.data[field];
-                const isModified = String(value) !== String(originalValue);
-                const inputType = getFieldInputType(field, value);
-                
-                return (
-                  <div key={field} className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground flex items-center justify-between">
-                      <span>{fl(field)}</span>
-                      {isModified && canEdit && (
-                        <span className="text-[10px] text-amber-600">modifié</span>
-                      )}
-                    </Label>
-                    
-                    {!canEdit ? (
-                      <div className="p-2 rounded-md bg-muted/20 text-sm font-mono">
-                        {fv(value)}
-                      </div>
-                    ) : inputType === "select" ? (
-                      <Select
-                        value={String(value)}
-                        onValueChange={(v) => handleFieldChange(field, v === "true" || v === "oui" || v === "Oui")}
-                      >
-                        <SelectTrigger className="h-9 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="true">Oui / Actif</SelectItem>
-                          <SelectItem value="false">Non / Inactif</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    ) : inputType === "textarea" ? (
-                      <textarea
-                        value={String(value)}
-                        onChange={(e) => handleFieldChange(field, e.target.value)}
-                        className={cn(
-                          "w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                          isModified && "border-amber-500"
-                        )}
-                        rows={3}
-                      />
-                    ) : (
-                      <Input
-                        type={inputType}
-                        value={String(value)}
-                        onChange={(e) => handleFieldChange(field, inputType === "number" ? parseFloat(e.target.value) : e.target.value)}
-                        className={cn(
-                          "h-9 text-sm",
-                          isModified && "border-amber-500 focus-visible:ring-amber-500"
-                        )}
-                      />
-                    )}
-                    
-                    {isModified && originalValue !== undefined && canEdit && (
-                      <p className="text-[10px] text-muted-foreground">
-                        Ancienne valeur: {fv(originalValue)}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Champs en divergence modifiables */}
+                        {/* Champs en divergence modifiables - section supplémentaire */}
             {equipment.anomalies.some(a => a.type === "divergence") && canEdit && (
               <div className="space-y-2">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-amber-600">
@@ -575,6 +511,181 @@ function EquipmentDetailSheet({
                   })}
               </div>
             )}
+
+            {/* Section anomalies */}
+            {!canEdit && equipment.anomalies.length > 0  && (
+              <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertCircle className="h-4 w-4 text-amber-600" />
+                  <span className="font-semibold text-sm text-amber-700">Anomalie détectée</span>
+                </div>
+                {equipment.anomalies.map((anomaly) => (
+                  <div key={anomaly.id} className="text-sm space-y-2">
+                    <div className="flex items-center gap-2">
+                      <AnomalyBadge type={anomaly.type} />
+                      <span className="text-muted-foreground text-xs">ID: {anomaly.id}</span>
+                    </div>
+                    
+                    {/* Doublons - Affichage détaillé avec toutes les occurrences */}
+                    {(anomaly.type === "duplicate" && anomaly.duplicate_occurrences) && (
+                      <div className="mt-2 pt-2 border-t border-amber-500/20">
+                        <p className="text-xs font-medium mb-2">Toutes les occurrences ({anomaly.duplicate_occurrences.length}) :</p>
+                        <div className="space-y-2">
+                          {anomaly.duplicate_occurrences.map((occ, idx) => (
+                            <div key={idx} className="text-xs bg-muted/20 p-2 rounded">
+                              <div className="font-mono font-medium">M-RID: {occ.m_rid}</div>
+                              <div>Nom: {occ.name || "—"}</div>
+                              {occ.substations_m_rid && <div>Poste: {occ.substations_m_rid}</div>}
+                              {occ.full_record && (
+                                <div className="mt-1 pt-1 border-t border-border/50">
+                                  <details>
+                                    <summary className="cursor-pointer text-[10px] text-muted-foreground">Voir tous les champs</summary>
+                                    <div className="mt-1 grid grid-cols-2 gap-1 text-[10px]">
+                                      {Object.entries(occ.full_record)
+                                        .filter(([k]) => !HIDDEN_FIELDS.has(k))
+                                        .slice(0, 10)
+                                        .map(([k, v]) => (
+                                          <div key={k}><span className="text-muted-foreground">{fl(k)}:</span> {fv(v)}</div>
+                                        ))}
+                                    </div>
+                                  </details>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Divergences - Tous les champs divergents avec propriétés */}
+                    {(anomaly.type === "divergence" && anomaly.divergent_fields) && (
+                      <div className="mt-2 pt-2 border-t border-amber-500/20">
+                        <p className="text-xs font-medium mb-2">Tous les champs en divergence ({anomaly.divergent_fields.length}) :</p>
+                        <div className="space-y-2">
+                          {anomaly.divergent_fields.map((df, idx) => (
+                            <div key={idx} className="p-2 rounded bg-muted/20">
+                              <div className="font-medium text-xs mb-1">{fl(df.field)}</div>
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div className="p-1.5 rounded bg-red-50 dark:bg-red-950/20">
+                                  <span className="text-red-600 dark:text-red-400 text-[10px] font-medium">RÉFÉRENCE</span>
+                                  <p className="font-mono break-words">{fv(df.reference_value)}</p>
+                                </div>
+                                <div className="p-1.5 rounded bg-amber-50 dark:bg-amber-950/20">
+                                  <span className="text-amber-600 dark:text-amber-400 text-[10px] font-medium">COLLECTÉ</span>
+                                  <p className="font-mono break-words">{fv(df.collected_value)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Localisation GPS - disabled */}
+            {equipment.location && (
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <MapPin className="h-3 w-3 inline mr-1" />
+                  Localisation GPS
+                </Label>
+                <div className="p-3 rounded-lg bg-muted/30">
+                  <p className="text-sm font-mono">
+                    {equipment.location.lat.toFixed(6)}, {equipment.location.lng.toFixed(6)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    ⚠️ La localisation ne peut pas être modifiée
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Données de l'équipement */}
+            <div className="space-y-4">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Données de l'équipement
+              </Label>
+              
+              {allFields.map((field) => {
+                const value = editedData[field];
+                if (value === undefined) return null;
+                
+                const originalValue = equipment.data[field];
+                const isModified = String(value) !== String(originalValue);
+                const inputType = getFieldInputType(field, value);
+                const isDivergentField = divergentFieldNames.has(field);
+                const isDisabled = DISABLED_FIELDS.has(field) || !canEdit;
+                
+                return (
+                  <div key={field} className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <span>{fl(field)}</span>
+                        {isDivergentField && (
+                          <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-600 border-amber-200">
+                            Divergence
+                          </Badge>
+                        )}
+                      </div>
+                      {isModified && canEdit && !isDisabled && (
+                        <span className="text-[10px] text-amber-600">modifié</span>
+                      )}
+                    </Label>
+                    
+                    {isDisabled ? (
+                      <div className="p-2 rounded-md bg-muted/20 text-sm font-mono">
+                        {fv(value)}
+                      </div>
+                    ) : inputType === "select" ? (
+                      <Select
+                        value={String(value)}
+                        onValueChange={(v) => handleFieldChange(field, v === "true" || v === "oui" || v === "Oui")}
+                      >
+                        <SelectTrigger className="h-9 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="true">Oui / Actif</SelectItem>
+                          <SelectItem value="false">Non / Inactif</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : inputType === "textarea" ? (
+                      <textarea
+                        value={String(value)}
+                        onChange={(e) => handleFieldChange(field, e.target.value)}
+                        className={cn(
+                          "w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                          isModified && "border-amber-500"
+                        )}
+                        rows={3}
+                      />
+                    ) : (
+                      <Input
+                        type={inputType}
+                        value={String(value)}
+                        onChange={(e) => handleFieldChange(field, inputType === "number" ? parseFloat(e.target.value) : e.target.value)}
+                        className={cn(
+                          "h-9 text-sm",
+                          isModified && "border-amber-500 focus-visible:ring-amber-500"
+                        )}
+                      />
+                    )}
+                    
+                    {isModified && originalValue !== undefined && canEdit && !isDisabled && (
+                      <p className="text-[10px] text-muted-foreground">
+                        Ancienne valeur: {fv(originalValue)}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+
           </div>
 
           {canEdit && (
@@ -619,6 +730,50 @@ function EquipmentDetailSheet({
         </Dialog>
       )}
     </>
+  );
+}
+
+// Ajoutez ce composant pour les équipements 
+function OkEquipmentCard({ equipment, onEquipmentClick, isClickable }: {
+  equipment: EquipmentDetail;
+  onEquipmentClick?: (equipment: EquipmentDetail) => void;
+  isClickable: boolean;
+}) {
+  const Icon = TABLE_ICONS[equipment.table] || Box;
+  const iconColor = "text-primary";
+  
+  const displayFields = ["name", "type", "voltage", "active"].filter(f => equipment.data[f] !== undefined).slice(0, 4);
+
+  const handleClick = () => {
+    if (isClickable) {
+      onEquipmentClick?.(equipment);
+    }
+  };
+
+  return (
+    <div 
+      onClick={handleClick}
+      className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-950/10 cursor-pointer hover:shadow-md transition-all"
+    >
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-emerald-200/50 dark:border-emerald-800/50">
+        <Icon className={cn("h-3.5 w-3.5 shrink-0", iconColor)} />
+        <span className="text-xs font-semibold truncate flex-1">{equipment.name}</span>
+        <Badge variant="outline" className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400">
+          <CheckCircle2 className="h-2.5 w-2.5 mr-1" />
+          Conforme
+        </Badge>
+      </div>
+      <div className="p-3">
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          {displayFields.map((field) => (
+            <div key={field}>
+              <span className="text-muted-foreground text-[10px]">{fl(field)}</span>
+              <p className="font-mono text-xs truncate">{fv(equipment.data[field])}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -712,7 +867,7 @@ function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquip
       mrid: anomaly.mrid,
       table: anomaly.table,
       name: anomaly.name || recordData.name || String(anomaly.mrid),
-      data: { ...recordData, _anomalyType: anomaly.type }, // Ajout du type d'anomalie pour la couleur
+      data: { ...recordData, _anomalyType: anomaly.type },
       anomalies: [anomaly],
       photo: photoUrl,  
       location: recordData.latitude && recordData.longitude
@@ -750,6 +905,41 @@ function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquip
   };
 
   const displayPhotoUrl = getPhotoUrl(equipmentDetail?.photo);
+
+  // Préparer les champs à afficher selon le type d'anomalie
+  const displayFields = useMemo(() => {
+    const data = equipmentDetail?.data || {};
+    const fields = Object.keys(data).filter(k => 
+      k !== "m_rid" && k !== "_anomalyType" && k !== "created_date" && k !== "created_at" && k !== "photo"
+    );
+    
+    if (anomaly.type === "divergence" && anomaly.divergent_fields) {
+      // Pour les divergences, afficher les champs divergents avec leurs valeurs collectées
+      return anomaly.divergent_fields.slice(0, 6).map(df => ({
+        label: fl(df.field),
+        value: fv(df.collected_value),
+        field: df.field
+      }));
+    } else if (anomaly.type === "new" || anomaly.type === "missing") {
+      // Pour nouveaux et manquants, afficher 6 propriétés
+      const importantFields = ["name", "type", "voltage", "regime", "exploitation", "zone_type", "section", "nature_conducteur", "phase"];
+      const selectedFields = importantFields.filter(f => data[f] !== undefined).slice(0, 6);
+      if (selectedFields.length < 6) {
+        const otherFields = fields.filter(f => !importantFields.includes(f)).slice(0, 6 - selectedFields.length);
+        selectedFields.push(...otherFields);
+      }
+      return selectedFields.map(f => ({ label: fl(f), value: fv(data[f]), field: f }));
+    } else if (anomaly.type === "duplicate") {
+      // Pour les doublons, afficher les infos de base
+      return [
+        { label: "Nom", value: anomaly.name || "—", field: "name" },
+        { label: "M-RID", value: anomaly.mrid, field: "m_rid" },
+        { label: "Occurrences", value: `${anomaly.duplicate_occurrences?.length || 0}`, field: "count" },
+      ];
+    }
+    
+    return fields.slice(0, 6).map(f => ({ label: fl(f), value: fv(data[f]), field: f }));
+  }, [equipmentDetail, anomaly]);
 
   return (
     <>
@@ -821,52 +1011,50 @@ function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquip
                 </span>
               </div>
             )}
-          
-            {anomaly.type === "divergence" && anomaly.divergent_fields && anomaly.divergent_fields.slice(0, 3).map((df, idx) => (
-              <div key={idx} className="grid grid-cols-2 gap-2 text-xs mb-2">
-                <div className="p-1.5 rounded bg-red-50 dark:bg-red-950/20">
-                  <span className="text-red-600 dark:text-red-400 text-[10px] font-medium">RÉFÉRENCE</span>
-                  <p className="font-mono text-xs wrap-break-word">{fv(df.reference_value)}</p>
-                </div>
-                <div className="p-1.5 rounded bg-amber-50 dark:bg-amber-950/20">
-                  <span className="text-amber-600 dark:text-amber-400 text-[10px] font-medium">COLLECTÉ</span>
-                  <p className="font-mono text-xs wrap-break-word">{fv(df.collected_value)}</p>
+            
+            {/* Affichage des champs selon le type d'anomalie */}
+            {anomaly.type === "divergence" && anomaly.divergent_fields ? (
+              <div className="space-y-2">
+                {anomaly.divergent_fields.slice(0, 3).map((df, idx) => (
+                  <div key={idx} className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-1.5 rounded bg-red-50 dark:bg-red-950/20">
+                      <span className="text-red-600 dark:text-red-400 text-[10px] font-medium">{fl(df.field)} - RÉFÉRENCE</span>
+                      <p className="font-mono text-xs break-words">{fv(df.reference_value)}</p>
+                    </div>
+                    <div className="p-1.5 rounded bg-amber-50 dark:bg-amber-950/20">
+                      <span className="text-amber-600 dark:text-amber-400 text-[10px] font-medium">{fl(df.field)} - COLLECTÉ</span>
+                      <p className="font-mono text-xs break-words">{fv(df.collected_value)}</p>
+                    </div>
+                  </div>
+                ))}
+                {anomaly.divergent_fields.length > 3 && (
+                  <p className="text-[10px] text-muted-foreground text-center">
+                    + {anomaly.divergent_fields.length - 3} autres champs en divergence
+                  </p>
+                )}
+              </div>
+            ) : anomaly.type === "duplicate" && anomaly.duplicate_occurrences ? (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-purple-600">⚠️ {anomaly.duplicate_occurrences.length} occurrences trouvées</p>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {anomaly.duplicate_occurrences.slice(0, 3).map((occ, idx) => (
+                    <div key={idx} className="text-[10px] font-mono bg-muted/30 p-1 rounded">
+                      {occ.m_rid} - {occ.name}
+                    </div>
+                  ))}
+                  {anomaly.duplicate_occurrences.length > 3 && (
+                    <p className="text-[9px] text-muted-foreground">+{anomaly.duplicate_occurrences.length - 3} autres</p>
+                  )}
                 </div>
               </div>
-            ))}
-          
-            {anomaly.type === "duplicate" && anomaly.duplicate_occurrences && (
-              <div className="text-xs text-muted-foreground">
-                ⚠️ {anomaly.duplicate_occurrences.length} occurrences trouvées
-              </div>
-            )}
-          
-            {(anomaly.type === "missing" || anomaly.type === "new") && equipmentDetail?.data && (
-              <div className="grid grid-cols-2 gap-1 text-[11px]">
-                {equipmentDetail.data.type && (
-                  <div>
-                    <span className="text-muted-foreground">Type</span>
-                    <p className="font-mono truncate">{equipmentDetail.data.type}</p>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-2 text-xs">
+                {displayFields.map((field) => (
+                  <div key={field.field} className="truncate">
+                    <span className="text-muted-foreground">{field.label}:</span>
+                    <p className="font-mono truncate">{field.value}</p>
                   </div>
-                )}
-                {equipmentDetail.data.voltage && (
-                  <div>
-                    <span className="text-muted-foreground">Tension</span>
-                    <p className="font-mono truncate">{equipmentDetail.data.voltage} kV</p>
-                  </div>
-                )}
-                {equipmentDetail.data.regime && (
-                  <div>
-                    <span className="text-muted-foreground">Régime</span>
-                    <p className="font-mono truncate">{equipmentDetail.data.regime}</p>
-                  </div>
-                )}
-                {equipmentDetail.data.exploitation && (
-                  <div>
-                    <span className="text-muted-foreground">Exploitation</span>
-                    <p className="font-mono truncate">{equipmentDetail.data.exploitation}</p>
-                  </div>
-                )}
+                ))}
               </div>
             )}
           </div>
@@ -922,15 +1110,21 @@ function TableGroup({ table, anomalies, filter, treatment, onFieldChange, onMark
   
   const filteredAnomalies = useMemo(() => {
     if (filter === "all") return anomalies;
-    if (filter === "ok") return [];
+    if (filter === "ok") return anomalies.filter((a) => a.type === "ok");
     return anomalies.filter((a) => a.type === filter);
   }, [anomalies, filter]);
   
-  const treatedCount = filteredAnomalies.filter((a) => treatment[a.id]?.treated).length;
-  const allDone = treatedCount === filteredAnomalies.length && filteredAnomalies.length > 0;
+  const okCount = filteredAnomalies.filter((a) => a.type === "ok").length;
+  const anomalyCount = filteredAnomalies.filter((a) => a.type !== "ok").length;
+  const treatedCount = filteredAnomalies.filter((a) => a.type !== "ok" && treatment[a.id]?.treated).length;
+  const allDone = treatedCount === anomalyCount && anomalyCount > 0;
   const totalCount = filteredAnomalies.length;
   
   if (totalCount === 0) return null;
+
+  // Séparer les OK des anomalies
+  const okAnomalies = filteredAnomalies.filter(a => a.type === "ok");
+  const otherAnomalies = filteredAnomalies.filter(a => a.type !== "ok");
 
   return (
     <div className="rounded-xl border border-border overflow-hidden">
@@ -939,12 +1133,20 @@ function TableGroup({ table, anomalies, filter, treatment, onFieldChange, onMark
         {open ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
         <Icon className="h-4 w-4 shrink-0 text-primary" />
         <span className="font-medium text-sm flex-1">{TABLE_LABELS[table] || table}</span>
-        <span className="text-xs text-muted-foreground">{filteredAnomalies.length} anomalie{filteredAnomalies.length > 1 ? "s" : ""}</span>
-        {allDone && filteredAnomalies.length > 0 && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />}
+        <div className="flex items-center gap-2">
+          {anomalyCount > 0 && (
+            <span className="text-xs text-amber-600">{anomalyCount} anomalie{anomalyCount > 1 ? "s" : ""}</span>
+          )}
+          {okCount > 0 && (
+            <span className="text-xs text-emerald-600">{okCount} conforme{okCount > 1 ? "s" : ""}</span>
+          )}
+        </div>
+        {allDone && anomalyCount > 0 && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />}
       </button>
       {open && (
         <div className="p-3 space-y-3">
-          {filteredAnomalies.map((a) => (
+          {/* Afficher d'abord les anomalies */}
+          {otherAnomalies.map((a) => (
             <AnomalyCard 
               key={a.id} 
               anomaly={a} 
@@ -955,12 +1157,37 @@ function TableGroup({ table, anomalies, filter, treatment, onFieldChange, onMark
               isClickable={isClickable}
             />
           ))}
+          
+          {/* Puis afficher les OK */}
+          {okAnomalies.length > 0 && otherAnomalies.length > 0 && (
+            <div className="pt-2 border-t border-border/50">
+              <p className="text-xs text-muted-foreground mb-2">✓ Équipements conformes</p>
+            </div>
+          )}
+          {okAnomalies.map((a) => {
+            // Convertir l'anomalie OK en EquipmentDetail
+            const equipmentDetail: EquipmentDetail = {
+              id: a.mrid,
+              mrid: a.mrid,
+              table: a.table,
+              name: a.name || a.mrid,
+              data: a.data || {},
+              anomalies: [a],
+            };
+            return (
+              <OkEquipmentCard 
+                key={a.id}
+                equipment={equipmentDetail}
+                onEquipmentClick={onEquipmentClick}
+                isClickable={isClickable}
+              />
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
-
 // ─── Timer Component ──────────────────────────────────────────────────────────
 function TimerDisplay({ startTime }: { startTime: number | null }) {
   const [elapsed, setElapsed] = useState<string>("00:00:00");
@@ -1010,35 +1237,52 @@ const convertToMapEquipments = (comparisonResult: FeederComparisonResult | null)
   if (!comparisonResult) return [];
   
   const mapEquipments: Record<string, unknown>[] = [];
-  const tables: TableName[] = ["feeder", "substation", "bus_bar", "bay", "switch", "powertransformer", "wire"];
+  //const tables: TableName[] = ["feeder", "substation", "bus_bar", "bay", "switch", "powertransformer", "wire"];
+  const tables: TableName[] = ["substation"];
   
   for (const table of tables) {
     const tableResult = comparisonResult.tables?.[table];
     if (!tableResult) continue;
     
-    for (const ref of tableResult.reference ?? []) {
-      mapEquipments.push({ ...ref, table, _anomalyType: undefined });
+
+    // Équipements OK (conformes)
+    for (const ok of tableResult.ok ?? []) {
+      if (ok.data?.latitude && ok.data?.longitude) {
+        mapEquipments.push({ 
+          ...ok.data, 
+          m_rid: ok.mrid, 
+          table, 
+          _anomalyType: "ok" 
+        });
+      }
     }
+    // Manquants
     for (const missing of tableResult.missing ?? []) {
-      mapEquipments.push({ ...missing, table, _anomalyType: "missing" });
+      mapEquipments.push({ ...missing.full_record, m_rid: missing.m_rid, name: missing.name, table, _anomalyType: "missing" });
     }
+    // Nouveaux
     for (const newItem of tableResult.new ?? []) {
-      mapEquipments.push({ ...newItem, table, _anomalyType: "new" });
+      mapEquipments.push({ ...newItem.full_record, m_rid: newItem.m_rid, name: newItem.name, table, _anomalyType: "new" });
     }
+    // Divergences
     for (const div of tableResult.divergences ?? []) {
       if (div.collected_data) {
         mapEquipments.push({
           ...div.collected_data,
+          m_rid: div.mrid,
           table,
           _anomalyType: "divergence",
           _referenceData: div.reference_data,
         });
       }
     }
+    // Doublons
     for (const dup of tableResult.duplicates ?? []) {
       for (const occ of dup.occurrences ?? []) {
         mapEquipments.push({
-          ...occ,
+          ...occ.full_record,
+          m_rid: occ.m_rid,
+          name: occ.name,
           table,
           _anomalyType: "duplicate",
           _duplicateOccurrences: dup.occurrences,
@@ -1058,7 +1302,7 @@ export default function FeederProcessingPage() {
   const feederNameFromUrl = searchParams?.get("name") || feederId;
 
   // Utiliser le hook de comparaison
-  const { result: comparisonResult, loading: comparisonLoading, error: comparisonError, refresh } = useFeederComparison(feederId);
+  const { result: comparisonResult, summary, loading: comparisonLoading, error: comparisonError, refresh } = useFeederComparison(feederId);
 
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [treatment, setTreatment] = useState<TreatmentState>({});
@@ -1108,7 +1352,7 @@ export default function FeederProcessingPage() {
   }, []);
 
   // Convertir les anomalies du résultat en format utilisable
-const allAnomalies: AnomalyItem[] = useMemo(() => {
+  const allAnomalies: AnomalyItem[] = useMemo(() => {
     if (!comparisonResult) return [];
     
     const anomalies: AnomalyItem[] = [];
@@ -1118,6 +1362,18 @@ const allAnomalies: AnomalyItem[] = useMemo(() => {
       const tableResult = comparisonResult.tables?.[table];
       if (!tableResult) continue;
       
+      // Équipements OK (conformes) - on les ajoute aussi pour l'affichage
+      for (const ok of tableResult.ok ?? []) {
+        anomalies.push({
+          id: `${table}-ok-${ok.mrid}`,
+          type: "ok" as AnomalyType,
+          table,
+          mrid: ok.mrid,
+          name: ok.data?.name || ok.mrid,
+          data: ok.data,
+        });
+      }
+      
       for (const missing of tableResult.missing ?? []) {
         anomalies.push({
           id: `${table}-miss-${missing.m_rid}`,
@@ -1125,7 +1381,7 @@ const allAnomalies: AnomalyItem[] = useMemo(() => {
           table,
           mrid: missing.m_rid,
           name: missing.name,
-          data: missing,
+          data: missing.full_record,
         });
       }
       
@@ -1135,7 +1391,7 @@ const allAnomalies: AnomalyItem[] = useMemo(() => {
           type: "divergence",
           table,
           mrid: div.mrid,
-          name: div.reference_data?.name || div.collected_data?.name || div.mrid,
+          name: div.name || div.reference_data?.name || div.collected_data?.name || div.mrid,
           reference_data: div.reference_data,
           collected_data: div.collected_data,
           divergent_fields: div.divergent_fields,
@@ -1149,7 +1405,7 @@ const allAnomalies: AnomalyItem[] = useMemo(() => {
           table,
           mrid: newItem.m_rid,
           name: newItem.name,
-          data: newItem,
+          data: newItem.full_record,
         });
       }
       
@@ -1162,7 +1418,7 @@ const allAnomalies: AnomalyItem[] = useMemo(() => {
             mrid: occ.m_rid,
             name: occ.name,
             duplicate_occurrences: dup.occurrences,
-            collected_data: occ,
+            collected_data: occ.full_record,
           });
         }
       }
@@ -1171,19 +1427,30 @@ const allAnomalies: AnomalyItem[] = useMemo(() => {
     return anomalies;
   }, [comparisonResult]);
 
-  // Compter les anomalies par type
+  // Utiliser les comptes du summary du backend
   const counts = useMemo(() => {
-    const result: Record<FilterType, number> = {
+    if (summary) {
+      return {
+        all: summary.total,
+        ok: summary.ok,
+        duplicate: summary.duplicate,
+        divergence: summary.divergence,
+        new: summary.new,
+        missing: summary.missing,
+        complex: summary.complex,
+      };
+    }
+    // Fallback si pas de summary
+    return {
       all: allAnomalies.length,
-      ok: 0,
+      ok: allAnomalies.filter(a => a.type === "ok").length,
       duplicate: allAnomalies.filter(a => a.type === "duplicate").length,
       divergence: allAnomalies.filter(a => a.type === "divergence").length,
       new: allAnomalies.filter(a => a.type === "new").length,
       missing: allAnomalies.filter(a => a.type === "missing").length,
       complex: allAnomalies.filter(a => a.type === "complex").length,
     };
-    return result;
-  }, [allAnomalies]);
+  }, [summary, allAnomalies]);
 
   // Grouper les anomalies par table
   const anomaliesByTable = useMemo(() => {
@@ -1354,30 +1621,13 @@ const allAnomalies: AnomalyItem[] = useMemo(() => {
     toast.success(`${equipment.name} sauvegardé`);
   }, []);
 
-  const handleMarkerClick = useCallback((equipment: Record<string, unknown>) => {
-    // Convertir l'équipement de la carte en EquipmentDetail pour l'ouvrir dans le sheet
-    const eq = equipment as EquipmentRecordWithAnomaly;
-    const equipmentDetail: EquipmentDetail = {
-      id: String(eq.m_rid),
-      mrid: String(eq.m_rid),
-      table: eq.table || "unknown",
-      name: eq.name || String(eq.m_rid),
-      data: eq,
-      anomalies: eq._anomalyType ? [{
-        id: `${eq.table}-${eq._anomalyType}-${eq.m_rid}`,
-        type: eq._anomalyType as AnomalyType,
-        table: eq.table || "unknown",
-        mrid: String(eq.m_rid),
-        name: eq.name || String(eq.m_rid),
-      }] : [],
-      location: eq.latitude && eq.longitude ? {
-        lat: typeof eq.latitude === "string" ? parseFloat(eq.latitude) : eq.latitude as number,
-        lng: typeof eq.longitude === "string" ? parseFloat(eq.longitude) : eq.longitude as number,
-      } : undefined,
-    };
-    setSelectedEquipment(equipmentDetail);
-    setIsSheetOpen(true);
-  }, []);
+
+    const handleMarkerClick = useCallback((equipment: Record<string, unknown>) => {
+  // Ne rien faire - désactiver l'ouverture du modal
+  // Optionnel : afficher un toast ou un message si vous voulez
+  // toast.info("Cliquez sur les cartes d'anomalies pour voir les détails");
+  return;
+}, []);
 
   const filteredTableGroups = useMemo(() => {
     return Array.from(anomaliesByTable.entries()).map(([table, anomalies]) => ({
@@ -1444,7 +1694,7 @@ const allAnomalies: AnomalyItem[] = useMemo(() => {
             )}
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Traitement · <span className="font-medium text-foreground">{allAnomalies.length}</span> anomalie{allAnomalies.length > 1 ? "s" : ""}
+            Traitement · <span className="font-medium text-foreground">{counts.all}</span> anomalie{counts.all > 1 ? "s" : ""}
           </p>
         </div>
         <div className="flex flex-col md:flex-row gap-2 shrink-0">
@@ -1455,7 +1705,7 @@ const allAnomalies: AnomalyItem[] = useMemo(() => {
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards - Utilisation des comptes du summary */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 sm:gap-3">
         {KPI_CONFIG.map((cfg) => {
           const count = counts[cfg.type];
@@ -1513,7 +1763,7 @@ const allAnomalies: AnomalyItem[] = useMemo(() => {
       {/* Équipements groupés par table */}
       <div className="space-y-3">
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          {activeFilter === "all" ? `${allAnomalies.length} anomalies` :
+          {activeFilter === "all" ? `${counts.all} anomalies` : activeFilter === "ok" ? `${counts.ok} équipements conformes` :
            `${counts[activeFilter]} anomalies de type ${KPI_CONFIG.find(k => k.type === activeFilter)?.label}`}
         </h2>
 
