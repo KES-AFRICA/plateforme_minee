@@ -63,8 +63,7 @@ import {
   Wrench,
   ShieldCheck,
 } from "lucide-react";
-import { EneoDeparture, EneoRegion, EneoZone } from "@/lib/api/eneo-data";
-import { DistributionTree } from "../distribution/distribution-tree";
+import { FeedersTree } from "../distribution/feeders-tree";
 import { cn } from "@/lib/utils";
 
 const roleLabels: Record<string, string> = {
@@ -102,28 +101,6 @@ export function AppSidebar() {
     );
     if (match) setSelectedFeederId(match[2]);
   }, [pathname]);
-
-  const handleFeederSelectProcessing = (
-    dep: EneoDeparture,
-    region: EneoRegion,
-    zone: EneoZone
-  ) => {
-    setSelectedFeederId(dep.feederId);
-    router.push(
-      `/distribution/processing/feeder/${dep.feederId}?name=${encodeURIComponent(dep.name)}`
-    );
-  };
-
-  const handleFeederSelectValidation = (
-    dep: EneoDeparture,
-    region: EneoRegion,
-    zone: EneoZone
-  ) => {
-    setSelectedFeederId(dep.feederId);
-    router.push(
-      `/distribution/validation/feeder/${dep.feederId}?name=${encodeURIComponent(dep.name)}`
-    );
-  };
 
   const getInitials = (firstName?: string, lastName?: string) =>
     `${firstName?.charAt(0) || ""}${lastName?.charAt(0) || ""}`.toUpperCase();
@@ -228,10 +205,9 @@ export function AppSidebar() {
                                   <CollapsibleContent>
                                     <div className="mt-0.5 ml-2 pl-2 border-l border-sidebar-border/50 py-1">
                                       <div className="group-data-[collapsible=icon]:hidden">
-                                        <DistributionTree
+                                        <FeedersTree
                                           mode="processing"
                                           selectedFeederId={selectedFeederId}
-                                          onFeederSelect={handleFeederSelectProcessing}
                                         />
                                       </div>
                                     </div>
@@ -263,10 +239,9 @@ export function AppSidebar() {
                                   <CollapsibleContent>
                                     <div className="mt-0.5 ml-2 pl-2 border-l border-sidebar-border/50 py-1">
                                       <div className="group-data-[collapsible=icon]:hidden">
-                                        <DistributionTree
+                                        <FeedersTree
                                           mode="validation"
                                           selectedFeederId={selectedFeederId}
-                                          onFeederSelect={handleFeederSelectValidation}
                                         />
                                       </div>
                                     </div>
