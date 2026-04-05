@@ -35,7 +35,7 @@ export default function LoginPage() {
       // Demande la position avec un timeout plus long
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          console.log("Position obtenue:", position.coords.latitude, position.coords.longitude);
+          // console.log("Position obtenue:", position.coords.latitude, position.coords.longitude);
           resolve({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,

@@ -67,10 +67,10 @@ import { FeedersTree } from "../distribution/feeders-tree";
 import { cn } from "@/lib/utils";
 
 const roleLabels: Record<string, string> = {
-  admin:             "Administrateur",
-  team_lead:         "Chef d'équipe",
-  validation_agent:  "Agent de validation",
-  processing_agent:  "Agent de traitement",
+  "Admin":             "Administrateur",
+  'Chef équipe':         "Chef d'équipe",
+  'Agent validation':  "Agent de validation",
+  'Agent traitement':  "Agent de traitement",
 };
 
 export function AppSidebar() {

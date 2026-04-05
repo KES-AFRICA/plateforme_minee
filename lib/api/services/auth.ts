@@ -4,11 +4,11 @@ import { api } from "../client";
 
 function mapRoleIdToUserRole(roleId: number): User['role'] {
   switch (roleId) {
-    case 1: return 'admin';
-    case 2: return 'team_lead';
-    case 3: return 'validation_agent';
-    case 4: return 'processing_agent';
-    default: return 'processing_agent';
+    case 1: return 'Admin';
+    case 2: return 'Chef équipe';
+    case 3: return 'Agent validation';
+    case 4: return 'Agent traitement';
+    default: return 'Agent traitement';
   }
 }
 

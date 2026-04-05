@@ -20,21 +20,21 @@ interface UserFilters {
 // Helper pour mapper role_id (backend) → UserRole (frontend)
 function mapRoleIdToUserRole(roleId: number): UserRole {
   switch (roleId) {
-    case 1: return 'admin';
-    case 2: return 'team_lead';
-    case 3: return 'validation_agent';
-    case 4: return 'processing_agent';
-    default: return 'processing_agent';
+    case 1: return 'Admin';
+    case 2: return 'Chef équipe';
+    case 3: return 'Agent validation';
+    case 4: return 'Agent traitement';
+    default: return 'Agent traitement';
   }
 }
 
 // Helper pour mapper UserRole → role_id (backend)
 function mapRoleToRoleId(role: UserRole): number {
   switch (role) {
-    case 'admin': return 1;
-    case 'team_lead': return 2;
-    case 'validation_agent': return 3;
-    case 'processing_agent': return 4;
+    case 'Admin': return 1;
+    case 'Chef équipe': return 2;
+    case 'Agent validation': return 3;
+    case 'Agent traitement': return 4;
     default: return 4;
   }
 }
@@ -263,7 +263,7 @@ class UserService {
 
   // Agents de traitement : filtre depuis l'API réelle
   async getProcessingAgents(): Promise<ApiResponse<User[]>> {
-    const res = await this.getUsers({ role: 'processing_agent', isActive: true });
+    const res = await this.getUsers({ role: 'Agent traitement', isActive: true });
     if (res.data) {
       return { data: res.data.data };
     }
@@ -271,7 +271,7 @@ class UserService {
   }
 
   async getValidationAgents(): Promise<ApiResponse<User[]>> {
-    const res = await this.getUsers({ role: 'validation_agent', isActive: true });
+    const res = await this.getUsers({ role: 'Agent validation', isActive: true });
     if (res.data) {
       return { data: res.data.data };
     }

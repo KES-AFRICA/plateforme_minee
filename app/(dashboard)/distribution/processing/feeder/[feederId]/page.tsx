@@ -1653,6 +1653,7 @@ export default function FeederProcessingPage() {
           </p>
         </div>
         <div className="flex flex-col md:flex-row gap-2 shrink-0">
+         
           {renderActionButtons()}
           {feederStatus === "processing" && treatmentStartTime && (
             <TimerDisplay startTime={treatmentStartTime} />

@@ -73,18 +73,18 @@ type Company = "ENEO" | "GROUPEMENT" | "ARSEL" | "MINEE";
 
 const COMPANIES: Company[] = ["ENEO", "GROUPEMENT", "ARSEL", "MINEE"];
 
-const roleLabels: Record<UserRole, string> = {
-  admin: "Administrateur",
-  team_lead: "Chef d'équipe",
-  validation_agent: "Agent de validation",
-  processing_agent: "Agent de traitement",
+const roleLabels: Record<string, string> = {
+  "Admin":             "Administrateur",
+  'Chef équipe':         "Chef d'équipe",
+  'Agent validation':  "Agent de validation",
+  'Agent traitement':  "Agent de traitement",
 };
 
 const roleBadgeVariants: Record<UserRole, "default" | "secondary" | "destructive" | "outline"> = {
-  admin: "destructive",
-  team_lead: "default",
-  validation_agent: "secondary",
-  processing_agent: "outline",
+  "Admin":             "destructive",
+  'Chef équipe':         "default",
+  'Agent validation':  "secondary",
+  'Agent traitement':  "outline",
 };
 
 const companyBadgeVariants: Record<Company, "default" | "secondary"> = {
@@ -171,7 +171,7 @@ export default function UsersPage() {
       lastName: "",
       password: "",
       company: "",
-      role: "processing_agent",
+      role: "Agent traitement",
     });
   };
 

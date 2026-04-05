@@ -52,7 +52,7 @@ export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS];
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
 
-  admin: [
+  "Admin": [
     PERMISSIONS.VIEW_DASHBOARD,
     PERMISSIONS.VIEW_DISTRIBUTION,
     PERMISSIONS.VIEW_PROCESSING,
@@ -63,9 +63,16 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     PERMISSIONS.VIEW_SETTINGS,
     PERMISSIONS.MANAGE_USERS,
     PERMISSIONS.EXPORT_DATA,
+    PERMISSIONS.ACTION_COMPLETE_COLLECTION,
+    PERMISSIONS.ACTION_PROCESS_TASK,
+    PERMISSIONS.ACTION_ASSIGN_TASK,
+    PERMISSIONS.ACTION_VALIDATE_TASK,
+    PERMISSIONS.ACTION_REJECT_TASK,
+    PERMISSIONS.VIEW_NOTIFICATIONS,
+    PERMISSIONS.VIEW_SETTINGS,
   ],
 
-  team_lead: [
+  "Chef équipe": [
     PERMISSIONS.VIEW_DASHBOARD,
     PERMISSIONS.VIEW_DISTRIBUTION,
     PERMISSIONS.VIEW_PROCESSING,
@@ -82,7 +89,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     PERMISSIONS.EXPORT_DATA,
   ],
 
-  validation_agent: [
+  "Agent validation": [
     PERMISSIONS.VIEW_DASHBOARD,
     PERMISSIONS.VIEW_DISTRIBUTION,
     PERMISSIONS.VIEW_VALIDATION,
@@ -95,7 +102,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     PERMISSIONS.ACTION_PROCESS_TASK,
   ],
 
-  processing_agent: [
+  "Agent traitement": [
     PERMISSIONS.VIEW_DASHBOARD,
     PERMISSIONS.VIEW_DISTRIBUTION,
     PERMISSIONS.VIEW_PROCESSING,
@@ -141,10 +148,10 @@ export function getRequiredPermissionForRoute(pathname: string): Permission | nu
 
 export function getDefaultRouteForRole(role: UserRole): string {
   switch (role) {
-    case "admin":            return "/dashboard";
-    case "team_lead":        return "/dashboard";
-    case "validation_agent": return "/dashboard";
-    case "processing_agent": return "/dashboard";
+    case "Admin":            return "/dashboard";
+    case "Chef équipe":        return "/dashboard";
+    case "Agent validation": return "/dashboard";
+    case "Agent traitement": return "/dashboard";
     default:                 return "/login";
   }
 }

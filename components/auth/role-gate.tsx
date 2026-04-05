@@ -98,7 +98,7 @@ export function AdminOnly({
   fallback?: React.ReactNode;
 }) {
   return (
-    <RoleGate roles={["admin"]} fallback={fallback}>
+    <RoleGate roles={["Admin"]} fallback={fallback}>
       {children}
     </RoleGate>
   );
@@ -113,11 +113,12 @@ export function TeamLeadOrAdmin({
   fallback?: React.ReactNode;
 }) {
   return (
-    <RoleGate roles={["admin", "team_lead"]} fallback={fallback}>
+    <RoleGate roles={["Admin", "Chef équipe"]} fallback={fallback}>
       {children}
     </RoleGate>
   );
 }
+
 
 /** Visible pour ceux qui peuvent traiter des tâches */
 export function CanProcess({
