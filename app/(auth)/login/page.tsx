@@ -7,19 +7,11 @@ import { useI18n } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Spinner } from "@/components/ui/spinner";
-import { LanguageSwitch } from "@/components/shared/language-switch";
-import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { AlertCircle, Eye, EyeOff, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,39 +24,61 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const getCurrentPosition = (): Promise<{ latitude: number; longitude: number }> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        console.warn("Géolocalisation non supportée par le navigateur");
+        resolve({ latitude: 0, longitude: 0 });
+        return;
+      }
+
+      // Demande la position avec un timeout plus long
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          // console.log("Position obtenue:", position.coords.latitude, position.coords.longitude);
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.warn("Erreur de géolocalisation:", error.message);
+          // En cas de refus ou d'erreur, on renvoie 0,0
+          resolve({ latitude: 0, longitude: 0 });
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,      // 10 secondes max
+          maximumAge: 0,       // Ne pas utiliser de cache
+        }
+      );
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
 
     try {
-      const result = await login(email, password);
+      // Récupération de la position (toujours, avec valeur par défaut 0,0)
+      const { latitude, longitude } = await getCurrentPosition();
+
+      const result = await login(email, password, latitude, longitude);
+
       if (result.success) {
         toast.success(t("auth.welcomeBack"));
         router.push("/dashboard");
       } else {
+        // Afficher le message d'erreur retourné par le backend ou un message générique
         setError(result.error || t("auth.invalidCredentials"));
       }
-    } catch {
-      setError(t("errors.networkError"));
+    } catch (err: any) {
+      // Cas où l'erreur n'est pas capturée par login (ex: réseau)
+      setError(err.message || t("errors.networkError"));
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const demoAccounts = [
-    { role: "Admin", email: "admin@minee.cm", password: "admin123" },
-    { role: "Chef d'équipe", email: "marie.ekotto@minee.cm", password: "team123" },
-    { role: "Agent validation", email: "paul.mvondo@minee.cm", password: "valid123" },
-    { role: "Agent traitement", email: "agnes.fotso@minee.cm", password: "process123" },
-  ];
-
-  const handleDemoSelect = (email: string, password: string) => {
-    setEmail(email);
-    setPassword(password);
-    toast.info(`Compte ${email.split('@')[0]} sélectionné`, {
-      description: "Cliquez sur Se connecter pour continuer",
-    });
   };
 
   return (
@@ -229,37 +243,6 @@ export default function LoginPage() {
                   )}
                 </Button>
               </form>
-
-              {/* Demo Credentials - Dropdown */}
-              <div className="mt-6">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      className="w-full justify-between"
-                      disabled={isLoading}
-                    >
-                      <span>Comptes de démonstration</span>
-                      <ChevronDown className="h-4 w-4 opacity-50" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                    {demoAccounts.map((account, index) => (
-                      <DropdownMenuItem
-                        key={index}
-                        onClick={() => handleDemoSelect(account.email, account.password)}
-                        className="flex flex-col items-start py-2 cursor-pointer"
-                      >
-                        <span className="font-medium">{account.role}</span>
-                        <span className="text-xs text-muted-foreground">{account.email}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <p className="text-xs text-muted-foreground mt-2 text-center">
-                  Sélectionnez un compte pour remplir automatiquement les champs
-                </p>
-              </div>
             </CardContent>
           </Card>
         </div>

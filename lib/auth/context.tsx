@@ -1,78 +1,63 @@
+
 "use client";
 
-import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react";
+/**
+ * ============================================================
+ * TADEC — Auth Context (v3 — Intégration backend réel)
+ * ============================================================
+ */
+
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+} from "react";
 import { User, UserRole } from "@/lib/api/types";
 import { authService } from "@/lib/api/services/auth";
+import {
+  Permission,
+  ROLE_PERMISSIONS,
+  roleHasPermission,
+} from "@/lib/auth/permissions";
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (
+    email: string,
+    password: string,
+    latitude?: number,
+    longitude?: number
+  ) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
+  permissions: Permission[];
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Role-based permissions
-const rolePermissions: Record<UserRole, string[]> = {
-  admin: [
-    "view:dashboard",
-    "view:processing",
-    "view:validation",
-    "view:users",
-    "view:map",
-    "view:performance",
-    "manage:users",
-    "manage:tasks",
-    "validate:tasks",
-    "process:tasks",
-    "export:data",
-    "admin:settings",
-  ],
-  team_lead: [
-    "view:dashboard",
-    "view:processing",
-    "view:validation",
-    "view:users",
-    "view:map",
-    "view:performance",
-    "manage:tasks",
-    "validate:tasks",
-    "process:tasks",
-    "export:data",
-  ],
-  validation_agent: [
-    "view:dashboard",
-    "view:validation",
-    "view:performance",
-    "validate:tasks",
-  ],
-  processing_agent: [
-    "view:dashboard",
-    "view:processing",
-    "view:performance",
-    "process:tasks",
-  ],
-};
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // ── Restauration de session via /me (réel) ────────────────────────────────
   useEffect(() => {
-    // Check for existing session
     const checkSession = async () => {
       try {
-        const storedUser = localStorage.getItem("minee-user");
-        if (storedUser) {
-          const userData = JSON.parse(storedUser);
-          setUser(userData);
+        const response = await authService.getCurrentUser();
+        if (response.data) {
+          setUser(response.data);
+        } else {
+          // Token invalide ou absent
+          localStorage.removeItem('auth_token');
         }
       } catch {
-        localStorage.removeItem("minee-user");
+        localStorage.removeItem('auth_token');
       } finally {
         setIsLoading(false);
       }
@@ -80,32 +65,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkSession();
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
+  // ── Login ──────────────────────────────────────────────────────────────────
+  const login = useCallback(async (email: string, password: string, latitude: number = 0, longitude: number = 0) => {
     try {
-      const response = await authService.login({ email, password });
+      const response = await authService.login({ email, password }, latitude, longitude);
       if (response.data) {
         const { user: userData } = response.data;
         setUser(userData);
-        localStorage.setItem("minee-user", JSON.stringify(userData));
         return { success: true };
       }
-      return { success: false, error: "Invalid credentials" };
+      return { success: false, error: response.error || "Identifiants invalides" };
     } catch {
-      return { success: false, error: "Login failed" };
+      return { success: false, error: "Erreur de connexion" };
     }
   }, []);
 
+  // ── Logout ─────────────────────────────────────────────────────────────────
   const logout = useCallback(() => {
     setUser(null);
-    localStorage.removeItem("minee-user");
+    localStorage.removeItem("auth_token");
     authService.logout();
   }, []);
+
+  // ── Permissions calculées depuis la matrice centralisée ───────────────────
+  const permissions = useMemo<Permission[]>(() => {
+    if (!user) return [];
+    return ROLE_PERMISSIONS[user.role] ?? [];
+  }, [user]);
 
   const hasPermission = useCallback(
     (permission: string): boolean => {
       if (!user) return false;
-      const permissions = rolePermissions[user.role] || [];
-      return permissions.includes(permission);
+      return roleHasPermission(user.role, permission as Permission);
     },
     [user]
   );
@@ -128,8 +119,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       hasPermission,
       hasRole,
+      permissions,
     }),
-    [user, isLoading, login, logout, hasPermission, hasRole]
+    [user, isLoading, login, logout, hasPermission, hasRole, permissions]
   );
 
   return (

@@ -4,7 +4,7 @@ import { ApiError, PosteDetail, PostesMapResponse } from "@/lib/types/kobo";
 
 
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8001";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL_KOBO ?? "http://localhost:8001";
 
 // ── Helper fetch générique ────────────────────────────────────────────────────
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {

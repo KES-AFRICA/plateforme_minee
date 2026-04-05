@@ -1,16 +1,15 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect} from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
-import { formatDateTime, formatDateShort } from "@/lib/utils/date";
 import {
   Copy, GitCompare, FilePlus, FileX, AlertCircle,
-  CheckCircle2, ChevronRight, ChevronDown, Pencil,
+  CheckCircle2, ChevronRight, ChevronDown,
   X, Check, Zap, Building2, Cable, Box, ToggleLeft,
-  Layers, Info, MapPin, Save, UserCheck, Users, Filter,
-  Play, Clock, Timer, User, RefreshCw,
+  Layers, Info, MapPin, Save, UserCheck, Filter,
+  Play, Timer, User, RefreshCw,
   Maximize2
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -46,9 +45,10 @@ import React from "react";
 import { userService } from "@/lib/api/services/users";
 import { User as UserType } from "@/lib/api/types";
 import { useFeederComparison } from "@/hooks/useComparison";
-import { FeederComparisonResult, TableName, Divergence, Duplicate, AnomalyItem, EquipmentDetail } from "@/lib/types/comparison";
+import { FeederComparisonResult, TableName,AnomalyItem, EquipmentDetail } from "@/lib/types/comparison";
 import { buildPhotoUrl } from "@/lib/api/services/koboService";
 import { PhotoThumb } from "@/app/(dashboard)/map/page";
+import { useRoleGuard } from "@/hooks/use-role-guard";
 
 // ─── Leaflet client-only - Utilisation du nouveau FullscreenMap ──────────────
 const FullscreenMap = dynamic(
@@ -108,6 +108,7 @@ const TABLE_LABELS: Record<string, string> = {
   substation: "Substation", powertransformer: "Transformateur", bus_bar: "Bus Bar",
   bay: "Cellule", switch: "switch", wire: "Câble", feeder: "Départ",
 };
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const FL: Record<string, string> = {
@@ -242,6 +243,7 @@ function AssignDialog({
           <Button variant="outline" className="flex-1" onClick={onClose} disabled={isAssigning}>
             Annuler
           </Button>
+          
           <Button
             onClick={handleAssign}
             disabled={isAssigning || !selectedAgentId || processingAgents.length === 0}
@@ -265,7 +267,6 @@ function AssignDialog({
   );
 }
 
-// ─── Sheet pour les détails d'équipement ──────────────────────────────────────
 // ─── Sheet pour les détails d'équipement ──────────────────────────────────────
 function EquipmentDetailSheet({
   equipment,
@@ -413,9 +414,6 @@ function EquipmentDetailSheet({
         field === "w1_voltage" || field === "w2_voltage" || field === "highest_voltage_level") {
       return "number";
     }
-    // if (field === "localisation" || field === "description" || field === "observation") {
-    //   return "textarea";
-    // }
     return "text";
   };
 
@@ -468,7 +466,7 @@ function EquipmentDetailSheet({
               )}
             </div>
 
-                        {/* Champs en divergence modifiables - section supplémentaire */}
+            {/* Champs en divergence modifiables - section supplémentaire */}
             {equipment.anomalies.some(a => a.type === "divergence") && canEdit && (
               <div className="space-y-2">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-amber-600">
@@ -684,8 +682,6 @@ function EquipmentDetailSheet({
                 );
               })}
             </div>
-
-
           </div>
 
           {canEdit && (
@@ -777,63 +773,15 @@ function OkEquipmentCard({ equipment, onEquipmentClick, isClickable }: {
   );
 }
 
-// ─── Carte d'équipement (pour les bons équipements) ───────────────────────────
-function EquipmentCard({ equipment, onEquipmentClick, isClickable }: {
-  equipment: EquipmentDetail;
-  onEquipmentClick?: (equipment: EquipmentDetail) => void;
-  isClickable: boolean;
-}) {
-  const Icon = TABLE_ICONS[equipment.table] || Box;
-  const iconColor = "text-primary";
-  
-  const displayFields = ["name", "type", "voltage", "active"].filter(f => equipment.data[f] !== undefined).slice(0, 3);
-
-  const handleClick = () => {
-    if (isClickable) {
-      onEquipmentClick?.(equipment);
-    } else {
-      toast.info("Le traitement n'a pas encore commencé pour ce départ");
-    }
-  };
-
-  return (
-    <div 
-      onClick={handleClick}
-      className={cn(
-        "rounded-xl border border-border bg-card transition-all",
-        isClickable ? "cursor-pointer hover:shadow-md hover:border-primary/50" : "cursor-pointer"
-      )}
-    >
-      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/40">
-        <Icon className={cn("h-3.5 w-3.5 shrink-0", iconColor)} />
-        <span className="text-xs font-semibold truncate flex-1">{equipment.name}</span>
-        <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">
-          <CheckCircle2 className="h-2.5 w-2.5 mr-1" />
-          OK
-        </Badge>
-      </div>
-      <div className="p-2">
-        <div className="grid grid-cols-2 gap-1 text-[11px]">
-          {displayFields.map((field) => (
-            <div key={field}>
-              <span className="text-muted-foreground">{fl(field)}</span>
-              <p className="font-mono truncate">{fv(equipment.data[field])}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Carte d'anomalie ─────────────────────────────────────────────────────────
-function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquipmentClick, isClickable }: {
+function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquipmentClick, isClickable, canProcess }: {
   anomaly: AnomalyItem; 
   treatment: TreatmentState;
   onFieldChange: (id: string, field: string, val: string) => void;
   onMarkTreated: (id: string) => void;
   onEquipmentClick?: (equipment: EquipmentDetail) => void;
   isClickable: boolean;
+  canProcess: boolean;
 }) {
   const t = treatment[anomaly.id];
   const isTreated = t?.treated ?? false;
@@ -978,7 +926,7 @@ function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquip
             </span>
           )}
         </div>
-        
+
         <div className="p-3 grid grid-cols-1 md:grid-cols-5 gap-2">
           {displayPhotoUrl && (
             <div className="md:col-span-1 rounded-lg overflow-hidden bg-muted/20 border border-border relative group">
@@ -1060,7 +1008,7 @@ function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquip
           </div>
         </div>
 
-        {!isTreated && isClickable && (
+        {!isTreated && isClickable && canProcess && (
           <div className="flex justify-end pt-2 mt-2 border-t border-border/40">
             <button 
               onClick={(e) => { e.stopPropagation(); onMarkTreated(anomaly.id); }}
@@ -1094,7 +1042,7 @@ function AnomalyCard({ anomaly, treatment, onFieldChange, onMarkTreated, onEquip
 }
 
 // ─── Groupe par table ────────────────────────────────────────────────────────
-function TableGroup({ table, anomalies, filter, treatment, onFieldChange, onMarkTreated, onEquipmentClick, defaultOpen, isClickable }: {
+function TableGroup({ table, anomalies, filter, treatment, onFieldChange, onMarkTreated, onEquipmentClick, defaultOpen, isClickable, canProcess }: {
   table: string; 
   anomalies: AnomalyItem[]; 
   filter: FilterType;
@@ -1104,6 +1052,7 @@ function TableGroup({ table, anomalies, filter, treatment, onFieldChange, onMark
   onEquipmentClick?: (equipment: EquipmentDetail) => void;
   defaultOpen: boolean;
   isClickable: boolean;
+  canProcess: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const Icon = TABLE_ICONS[table] || Box;
@@ -1155,6 +1104,7 @@ function TableGroup({ table, anomalies, filter, treatment, onFieldChange, onMark
               onMarkTreated={onMarkTreated}
               onEquipmentClick={onEquipmentClick}
               isClickable={isClickable}
+              canProcess={canProcess}
             />
           ))}
           
@@ -1237,7 +1187,6 @@ const convertToMapEquipments = (comparisonResult: FeederComparisonResult | null)
   if (!comparisonResult) return [];
   
   const mapEquipments: Record<string, unknown>[] = [];
-  //const tables: TableName[] = ["feeder", "substation", "bus_bar", "bay", "switch", "powertransformer", "wire"];
   const tables: TableName[] = ["substation"];
   
   for (const table of tables) {
@@ -1303,6 +1252,9 @@ export default function FeederProcessingPage() {
 
   // Utiliser le hook de comparaison
   const { result: comparisonResult, summary, loading: comparisonLoading, error: comparisonError, refresh } = useFeederComparison(feederId);
+
+  // Récupération des permissions
+  const { canProcess, canAssign, canCompleteCollection } = useRoleGuard();
 
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [treatment, setTreatment] = useState<TreatmentState>({});
@@ -1540,53 +1492,6 @@ export default function FeederProcessingPage() {
     }
   };
 
-  const renderActionButtons = () => {
-    if (feederStatus === "collecting") {
-      return (
-        <Button onClick={handleCompleteCollection} className="gap-2 bg-blue-600 hover:bg-blue-700">
-          <Check className="h-4 w-4" />
-          Terminer la collecte 
-        </Button>
-      );
-    }
-    
-    if (feederStatus === "pending") {
-      if (!assignedAgent) {
-        return (
-          <Button onClick={() => { fetchProcessingAgents(); setIsAssignDialogOpen(true); }} className="gap-2 bg-purple-600 hover:bg-purple-700">
-            <UserCheck className="h-4 w-4" />
-            Assigner à un agent
-          </Button>
-        );
-      }
-      return (
-        <div className="flex gap-2">
-          <Button onClick={() => { fetchProcessingAgents(); setIsReassignDialogOpen(true); }} variant="outline" className="gap-2 border-purple-300 text-white bg-purple-800 hover:bg-purple-800 cursor-pointer">
-            <RefreshCw className="h-4 w-4" />
-            Assigner un autre agent
-          </Button>
-          {currentUser && assignedAgent.id === currentUser.id && (
-            <Button onClick={handleStartTreatment} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-              <Play className="h-4 w-4" />
-              Débuter le traitement
-            </Button>
-          )}
-        </div>
-      );
-    }
-    
-    if (feederStatus === "processing") {
-      return (
-        <Button onClick={handleStopTreatment} variant="outline" className="gap-2 border-red-300 text-red-600 hover:bg-red-600 hover:text-white">
-          <X className="h-4 w-4" />
-          Terminer le traitement
-        </Button>
-      );
-    }
-    
-    return null;
-  };
-
   const fetchProcessingAgents = async () => {
     try {
       const response = await userService.getUsers();
@@ -1597,6 +1502,59 @@ export default function FeederProcessingPage() {
       console.error("Failed to fetch processing agents:", error);
       toast.error("Impossible de charger la liste des agents");
     }
+  };
+
+  const renderActionButtons = () => {
+    if (feederStatus === "collecting") {
+      return canCompleteCollection ? (
+        <Button onClick={handleCompleteCollection} className="gap-2 bg-blue-600 hover:bg-blue-700">
+          <Check className="h-4 w-4" />
+          Terminer la collecte
+        </Button>
+      ) : null;
+    }
+    
+    if (feederStatus === "pending") {
+      if (!assignedAgent) {
+        return canAssign ? (
+          <Button onClick={() => { fetchProcessingAgents(); setIsAssignDialogOpen(true); }} className="gap-2 bg-purple-600 hover:bg-purple-700">
+            <UserCheck className="h-4 w-4" />
+            Assigner à un agent
+          </Button>
+        ) : null;
+      }
+      return (
+        <div className="flex gap-2">
+          {canAssign && (
+            <Button 
+              onClick={() => { fetchProcessingAgents(); setIsReassignDialogOpen(true); }} 
+              variant="outline" 
+              className="gap-2 border-purple-300 text-white bg-purple-800 hover:bg-purple-800 cursor-pointer"   
+            >
+              <RefreshCw className="h-4 w-4" />
+              Assigner un autre agent
+            </Button>
+          )}
+          {currentUser && assignedAgent.id === currentUser.id && canProcess && (
+            <Button onClick={handleStartTreatment} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+              <Play className="h-4 w-4" />
+              Débuter le traitement
+            </Button>
+          )}
+        </div>
+      );
+    }
+    
+    if (feederStatus === "processing") {
+      return canProcess ? (
+        <Button onClick={handleStopTreatment} variant="outline" className="gap-2 border-red-300 text-red-600 hover:bg-red-600 hover:text-white">
+          <X className="h-4 w-4" />
+          Terminer le traitement
+        </Button>
+      ) : null;
+    }
+    
+    return null;
   };
 
   const handleFieldChange = useCallback((id: string, field: string, val: string) => {
@@ -1621,13 +1579,10 @@ export default function FeederProcessingPage() {
     toast.success(`${equipment.name} sauvegardé`);
   }, []);
 
-
-    const handleMarkerClick = useCallback((equipment: Record<string, unknown>) => {
-  // Ne rien faire - désactiver l'ouverture du modal
-  // Optionnel : afficher un toast ou un message si vous voulez
-  // toast.info("Cliquez sur les cartes d'anomalies pour voir les détails");
-  return;
-}, []);
+  const handleMarkerClick = useCallback((equipment: Record<string, unknown>) => {
+    // Ne rien faire - désactiver l'ouverture du modal
+    return;
+  }, []);
 
   const filteredTableGroups = useMemo(() => {
     return Array.from(anomaliesByTable.entries()).map(([table, anomalies]) => ({
@@ -1698,6 +1653,7 @@ export default function FeederProcessingPage() {
           </p>
         </div>
         <div className="flex flex-col md:flex-row gap-2 shrink-0">
+         
           {renderActionButtons()}
           {feederStatus === "processing" && treatmentStartTime && (
             <TimerDisplay startTime={treatmentStartTime} />
@@ -1786,6 +1742,7 @@ export default function FeederProcessingPage() {
             onEquipmentClick={handleEquipmentClick} 
             defaultOpen={idx === 0}
             isClickable={isClickable}
+            canProcess={canProcess} 
           />
         ))}
       </div>

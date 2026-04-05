@@ -16,6 +16,7 @@ import { LanguageSwitch } from "@/components/shared/language-switch";
 import { NotificationDropdown } from "@/components/shared/notification-dropdown";
 import { usePathname, useSearchParams } from "next/navigation";
 import React from "react";
+import { useRoleGuard } from "@/hooks/use-role-guard";
 
 // Structure hiérarchique des pages statiques
 const routeConfig: Record<string, { label: string; href: string; parent?: string }> = {
@@ -133,6 +134,7 @@ export function AppHeader() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { t } = useI18n();
+  const { can } = useRoleGuard();
   
   // Utiliser useMemo pour recalculer le breadcrumb quand pathname ou searchParams change
   const breadcrumbItems = React.useMemo(() => {
@@ -169,7 +171,7 @@ export function AppHeader() {
       </div>
 
       <div className="flex items-center gap-2">
-        <NotificationDropdown />
+         {can("view:notifications") && <NotificationDropdown />}
         <LanguageSwitch />
         <ThemeToggle />
       </div>

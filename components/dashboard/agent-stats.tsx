@@ -15,10 +15,10 @@ interface AgentStatsProps {
 }
 
 const roleLabels: Record<string, string> = {
-  processing_agent:  "Agent traitement",
-  validation_agent:  "Agent validation",
-  team_lead:         "Chef d'équipe",
-  admin:             "Admin",
+    "Admin":             "Administrateur",
+  'Chef équipe':         "Chef d'équipe",
+  'Agent validation':  "Agent de validation",
+  'Agent traitement':  "Agent de traitement",
 };
 
 export function AgentStats({ stats, isLoading }: AgentStatsProps) {

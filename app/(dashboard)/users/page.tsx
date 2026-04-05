@@ -73,18 +73,18 @@ type Company = "ENEO" | "GROUPEMENT" | "ARSEL" | "MINEE";
 
 const COMPANIES: Company[] = ["ENEO", "GROUPEMENT", "ARSEL", "MINEE"];
 
-const roleLabels: Record<UserRole, string> = {
-  admin: "Administrateur",
-  team_lead: "Chef d'équipe",
-  validation_agent: "Agent de validation",
-  processing_agent: "Agent de traitement",
+const roleLabels: Record<string, string> = {
+  "Admin":             "Administrateur",
+  'Chef équipe':         "Chef d'équipe",
+  'Agent validation':  "Agent de validation",
+  'Agent traitement':  "Agent de traitement",
 };
 
 const roleBadgeVariants: Record<UserRole, "default" | "secondary" | "destructive" | "outline"> = {
-  admin: "destructive",
-  team_lead: "default",
-  validation_agent: "secondary",
-  processing_agent: "outline",
+  "Admin":             "destructive",
+  'Chef équipe':         "default",
+  'Agent validation':  "secondary",
+  'Agent traitement':  "outline",
 };
 
 const companyBadgeVariants: Record<Company, "default" | "secondary"> = {
@@ -112,7 +112,7 @@ export default function UsersPage() {
     email: "",
     firstName: "",
     lastName: "",
-    phone: "",
+    password: "",
     company: "" as Company | "",
     role: "processing_agent" as UserRole,
   });
@@ -159,18 +159,36 @@ export default function UsersPage() {
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
   };
 
+  const isValidEmail = (email: string) => {
+    const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return regex.test(email);
+  };
+
   const resetForm = () => {
     setFormData({
       email: "",
       firstName: "",
       lastName: "",
-      phone: "",
+      password: "",
       company: "",
-      role: "processing_agent",
+      role: "Agent traitement",
     });
   };
 
   const handleCreate = async () => {
+  // Vérification des champs obligatoires
+  if (!formData.email || !formData.firstName || !formData.lastName || !formData.company || !formData.role || !formData.password) {
+    toast.error("Tous les champs sont obligatoires");
+    return;
+  }
+
+  // Validation du format email
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.error("Veuillez saisir une adresse email valide");
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const response = await userService.createUser(formData);
@@ -251,7 +269,7 @@ export default function UsersPage() {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      phone: user.phone || "",
+      password: user.password,
       company: (user.company as Company) || "",
       role: user.role,
     });
@@ -585,7 +603,7 @@ interface UserFormProps {
     email: string;
     firstName: string;
     lastName: string;
-    phone: string;
+    password: string;
     company: Company | "";
     role: UserRole;
   };
@@ -604,6 +622,7 @@ function UserForm({ formData, setFormData, t }: UserFormProps) {
             <Label htmlFor="firstName">{t("users.firstName")}</Label>
             <Input
               id="firstName"
+              required
               autoComplete="given-name"
               value={formData.firstName}
               onChange={(e) =>
@@ -615,6 +634,7 @@ function UserForm({ formData, setFormData, t }: UserFormProps) {
             <Label htmlFor="lastName">{t("users.lastName")}</Label>
             <Input
               id="lastName"
+              required
               autoComplete="family-name"
               value={formData.lastName}
               onChange={(e) =>
@@ -633,6 +653,7 @@ function UserForm({ formData, setFormData, t }: UserFormProps) {
             <Input
               id="email"
               type="email"
+              required
               autoComplete="email"
               inputMode="email"
               value={formData.email}
@@ -642,15 +663,14 @@ function UserForm({ formData, setFormData, t }: UserFormProps) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="phone">{t("users.phone")}</Label>
+            <Label htmlFor="password">Mot de passe *</Label>
             <Input
-              id="phone"
-              type="tel"
-              autoComplete="tel"
-              inputMode="tel"
-              value={formData.phone}
+              id="password"
+              type="password"
+              required
+              value={formData.password}
               onChange={(e) =>
-                setFormData((prev) => ({ ...prev, phone: e.target.value }))
+                setFormData((prev) => ({ ...prev, password: e.target.value }))
               }
             />
           </div>
@@ -671,6 +691,7 @@ function UserForm({ formData, setFormData, t }: UserFormProps) {
                 onValueChange={(value: string) =>
                   setFormData((prev) => ({ ...prev, company: value as Company }))
                 }
+                required
               >
                 <SelectTrigger id="company" className="w-full">
                   <SelectValue placeholder="Sélectionner" />
@@ -692,6 +713,7 @@ function UserForm({ formData, setFormData, t }: UserFormProps) {
                 onValueChange={(value: string) =>
                   setFormData((prev) => ({ ...prev, role: value as UserRole }))
                 }
+                required
               >
                 <SelectTrigger id="role" className="w-full">
                   <SelectValue />
