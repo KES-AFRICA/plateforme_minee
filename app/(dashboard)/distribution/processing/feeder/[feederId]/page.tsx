@@ -52,8 +52,8 @@ import {
   useAssignTreatment, 
   useStartTreatment, 
   useCompleteTreatment, 
-  useValidateTreatment, 
-  useRejectTreatment, 
+  // useValidateTreatment, 
+  // useRejectTreatment, 
   useUpdateAttribute,
   useAllUsers,
   useSetPending,
@@ -1215,8 +1215,8 @@ export default function FeederProcessingPage() {
   const setPendingMutation = useSetPending();
   const setCollectingMutation = useSetCollecting();
   const setPendingValidationMutation = useSetPendingValidation();
-  const validateMutation = useValidateTreatment();
-  const rejectMutation = useRejectTreatment();
+  // const validateMutation = useValidateTreatment();
+  // const rejectMutation = useRejectTreatment();
   const updateAttributeMutation = useUpdateAttribute();
 
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
@@ -1473,48 +1473,50 @@ export default function FeederProcessingPage() {
   };
 
   const handleValidate = () => {
-    if (!user) {
-      toast.error("Utilisateur non connecté");
-      return;
-    }
+  //   if (!user) {
+  //     toast.error("Utilisateur non connecté");
+  //     return;
+  //   }
+  toast.warning("en cours de dévéloppement")
     
-    validateMutation.mutate({
-      feeder_id: feederId,
-      validated_by: user.id,
-      validated_by_name: `${user.firstName} ${user.lastName}`,
-      comment: "Validé après traitement",
-    }, {
-      onSuccess: () => {
-        toast.success("Départ validé avec succès");
-        refetchStatus();
-      },
-      onError: (error: Error) => {
-        toast.error(`Erreur: ${error.message}`);
-      }
-    });
-  };
+  //   validateMutation.mutate({
+  //     feeder_id: feederId,
+  //     validated_by: user.id,
+  //     validated_by_name: `${user.firstName} ${user.lastName}`,
+  //     comment: "Validé après traitement",
+  //   }, {
+  //     onSuccess: () => {
+  //       toast.success("Départ validé avec succès");
+  //       refetchStatus();
+  //     },
+  //     onError: (error: Error) => {
+  //       toast.error(`Erreur: ${error.message}`);
+  //     }
+  //   });
+   };
 
-  const handleReject = () => {
-    if (!user) {
-      toast.error("Utilisateur non connecté");
-      return;
-    }
+   const handleReject = () => {
+  //   if (!user) {
+  //     toast.error("Utilisateur non connecté");
+  //     return;
+  //   }
+  toast.warning("en cours de dévéloppement")
     
-    rejectMutation.mutate({
-      feeder_id: feederId,
-      rejected_by: user.id,
-      rejected_by_name: `${user.firstName} ${user.lastName}`,
-      reason: "Rejeté après validation",
-    }, {
-      onSuccess: () => {
-        toast.success("Départ rejeté");
-        refetchStatus();
-      },
-      onError: (error: Error) => {
-        toast.error(`Erreur: ${error.message}`);
-      }
-    });
-  };
+  //   rejectMutation.mutate({
+  //     feeder_id: feederId,
+  //     rejected_by: user.id,
+  //     rejected_by_name: `${user.firstName} ${user.lastName}`,
+  //     reason: "Rejeté après validation",
+  //   }, {
+  //     onSuccess: () => {
+  //       toast.success("Départ rejeté");
+  //       refetchStatus();
+  //     },
+  //     onError: (error: Error) => {
+  //       toast.error(`Erreur: ${error.message}`);
+  //     }
+  //   });
+   };
 
   // ─── CORRECTION : utilisation de TABLE_NAME_MAP pour convertir le nom
   const handleEquipmentSave = (equipment: EquipmentDetail, updatedData: Record<string, unknown>) => {
@@ -1614,11 +1616,20 @@ export default function FeederProcessingPage() {
         </Button>
       );
     }
+
+        if (feederStatus === "validated" || feederStatus === "rejected") {
+      return (
+        <Button onClick={handleCompleteCollection} className="gap-2 bg-blue-600 hover:bg-blue-700 cursor-pointer" disabled={setPendingMutation.isPending}>
+         <RefreshCw className="h-4 w-4 mr-2" />
+          Remettre en validation
+        </Button>
+      );
+    }
     
     // En attente de traitement
     if (feederStatus === "pending") {
       return (
-        <div className="flex gap-2">
+        <div className="flex flex-col md:flex-row gap-3">
           <Button 
             onClick={handleBackToCollecting} 
             variant="outline" 
@@ -1628,21 +1639,22 @@ export default function FeederProcessingPage() {
             {setCollectingMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
             Remettre en cours de collecte
           </Button>
-          {!assignedAgentId ? (
-            <Button onClick={() => setIsAssignDialogOpen(true)} className="gap-2 bg-purple-600 hover:bg-purple-700 cursor-pointer">
+<div className="flex items-center gap-2 "  >
+            {!assignedAgentId ? (
+            <Button onClick={() => setIsAssignDialogOpen(true)} className=" w-full gap-2 bg-purple-600 hover:bg-purple-700 cursor-pointer">
               <UserCheck className="h-4 w-4 mr-2" />
               Assigner à un agent
             </Button>
           ) : (
-            <div className="flex gap-2">
-              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+            <div className="flex gap-2 w-full">
+              <Badge variant="outline" className="w-1/2 bg-amber-50 text-amber-700 border-amber-200">
                 Assigné à {assignedAgentName}
               </Badge>
               {(user?.role === 'Admin' || user?.role === 'Chef équipe') && (
                 <Button 
                   onClick={() => setIsReassignDialogOpen(true)} 
                   variant="outline" 
-                  className="gap-2 cursor-pointer"
+                  className="gap-2 cursor-pointer w-1/2"
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Réassigner
@@ -1650,6 +1662,7 @@ export default function FeederProcessingPage() {
               )}
             </div>
           )}
+</div>
         </div>
       );
     }
@@ -1699,12 +1712,12 @@ export default function FeederProcessingPage() {
                 Remettre en traitement
               </Button>
 <div className="flex items-center gap-2 "  >
-                <Button onClick={handleValidate} className="w-1/2 gap-2 bg-emerald-600 hover:bg-emerald-700 cursor-pointer" disabled={validateMutation.isPending}>
-                {validateMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                <Button onClick={handleValidate} className="w-1/2 gap-2 bg-emerald-600 hover:bg-emerald-700 cursor-pointer" >
+                <CheckCircle2 className="h-4 w-4 mr-2" />
                 Valider
               </Button>
-              <Button onClick={handleReject} variant="outline" className="w-1/2 gap-2 border-red-300 text-red-600 hover:bg-red-600 hover:text-white cursor-pointer" disabled={rejectMutation.isPending}>
-                {rejectMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <X className="h-4 w-4 mr-2" />}
+              <Button onClick={handleReject} variant="outline" className="w-1/2 gap-2 border-red-300 text-red-600 hover:bg-red-600 hover:text-white cursor-pointer">
+                <X className="h-4 w-4 mr-2" />
                 Rejeter
               </Button>
 </div>

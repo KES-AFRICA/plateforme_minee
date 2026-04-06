@@ -74,17 +74,17 @@ type Company = "ENEO" | "GROUPEMENT" | "ARSEL" | "MINEE";
 const COMPANIES: Company[] = ["ENEO", "GROUPEMENT", "ARSEL", "MINEE"];
 
 const roleLabels: Record<string, string> = {
-  "Admin":             "Administrateur",
-  'Chef équipe':         "Chef d'équipe",
-  'Agent validation':  "Agent de validation",
-  'Agent traitement':  "Agent de traitement",
+  "Admin": "Administrateur",
+  "Chef équipe": "Chef d'équipe",
+  "Agent validation": "Agent de validation",
+  "Agent traitement": "Agent de traitement",
 };
 
 const roleBadgeVariants: Record<UserRole, "default" | "secondary" | "destructive" | "outline"> = {
-  "Admin":             "destructive",
-  'Chef équipe':         "default",
-  'Agent validation':  "secondary",
-  'Agent traitement':  "outline",
+  "Admin": "destructive",
+  "Chef équipe": "default",
+  "Agent validation": "secondary",
+  "Agent traitement": "outline",
 };
 
 const companyBadgeVariants: Record<Company, "default" | "secondary"> = {
@@ -93,7 +93,6 @@ const companyBadgeVariants: Record<Company, "default" | "secondary"> = {
   ARSEL: "secondary",
   MINEE: "secondary"
 };
-
 
 export default function UsersPage() {
   const { t, language } = useI18n();
@@ -114,7 +113,7 @@ export default function UsersPage() {
     lastName: "",
     password: "",
     company: "" as Company | "",
-    role: "processing_agent" as UserRole,
+    role: "Agent traitement" as UserRole,
   });
 
   useEffect(() => {
@@ -148,20 +147,19 @@ export default function UsersPage() {
     return matchesSearch && matchesRole;
   });
 
-  const formatDate = (dateString?: string) => {
+  const formatDate = (dateString?: string | null) => {
     if (!dateString) return "-";
-    return format(new Date(dateString), "dd MMM yyyy", {
-      locale: language === "fr" ? fr : enUS,
-    });
+    try {
+      return format(new Date(dateString), "dd MMM yyyy HH:mm", {
+        locale: language === "fr" ? fr : enUS,
+      });
+    } catch {
+      return "-";
+    }
   };
 
   const getInitials = (firstName: string, lastName: string) => {
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-  };
-
-  const isValidEmail = (email: string) => {
-    const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    return regex.test(email);
   };
 
   const resetForm = () => {
@@ -176,14 +174,12 @@ export default function UsersPage() {
   };
 
   const handleCreate = async () => {
-  // Vérification des champs obligatoires
-  if (!formData.email || !formData.firstName || !formData.lastName || !formData.company || !formData.role || !formData.password) {
-    toast.error("Tous les champs sont obligatoires");
-    return;
-  }
+    if (!formData.email || !formData.firstName || !formData.lastName || !formData.company || !formData.role || !formData.password) {
+      toast.error("Tous les champs sont obligatoires");
+      return;
+    }
 
-  // Validation du format email
-  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!emailRegex.test(formData.email)) {
       toast.error("Veuillez saisir une adresse email valide");
       return;
@@ -210,21 +206,36 @@ export default function UsersPage() {
   const handleEdit = async () => {
     if (!editUser) return;
 
+    const updates: Partial<User> = {};
+    
+    if (formData.email !== editUser.email) updates.email = formData.email;
+    if (formData.firstName !== editUser.firstName) updates.firstName = formData.firstName;
+    if (formData.lastName !== editUser.lastName) updates.lastName = formData.lastName;
+    if (formData.company !== (editUser.company as Company)) updates.company = formData.company;
+    if (formData.role !== editUser.role) updates.role = formData.role;
+
+    if (Object.keys(updates).length === 0) {
+      toast.info("Aucune modification détectée");
+      setEditUser(null);
+      resetForm();
+      return;
+    }
+
     setIsProcessing(true);
     try {
-      const response = await userService.updateUser(editUser.id, formData);
+      const response = await userService.updateUser(editUser.id, updates);
       if (response.data) {
         setUsers((prev) =>
           prev.map((u) => (u.id === editUser.id ? response.data! : u))
         );
-        toast.success(t("common.success"));
+        toast.success("Utilisateur modifié avec succès");
         setEditUser(null);
         resetForm();
       } else {
         toast.error(response.error || t("errors.serverError"));
       }
-    } catch {
-      toast.error(t("errors.networkError"));
+    } catch (error: any) {
+      toast.error(error.message || t("errors.networkError"));
     } finally {
       setIsProcessing(false);
     }
@@ -235,32 +246,37 @@ export default function UsersPage() {
 
     setIsProcessing(true);
     try {
-      await userService.deleteUser(deleteUser.id);
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === deleteUser.id ? { ...u, isActive: false } : u
-        )
-      );
-      toast.success(t("common.success"));
-      setDeleteUser(null);
-    } catch {
-      toast.error(t("errors.networkError"));
+      const response = await userService.deleteUser(deleteUser.id);
+      if (response.data !== undefined) {
+        setUsers((prev) => prev.filter((u) => u.id !== deleteUser.id));
+        toast.success("Utilisateur supprimé avec succès");
+        setDeleteUser(null);
+      } else {
+        toast.error(response.error || "Erreur lors de la suppression");
+      }
+    } catch (error: any) {
+      toast.error(error.message || t("errors.networkError"));
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleToggleStatus = async (user: User) => {
+    setIsProcessing(true);
     try {
-      const response = await userService.toggleUserStatus(user.id);
+      const response = await userService.toggleUserStatus(user.id, user.isActive);
       if (response.data) {
         setUsers((prev) =>
           prev.map((u) => (u.id === user.id ? response.data! : u))
         );
-        toast.success(t("common.success"));
+        toast.success(response.data.isActive ? "Utilisateur activé" : "Utilisateur désactivé");
+      } else {
+        toast.error(response.error || "Erreur lors du changement de statut");
       }
-    } catch {
-      toast.error(t("errors.networkError"));
+    } catch (error: any) {
+      toast.error(error.message || t("errors.networkError"));
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -269,14 +285,13 @@ export default function UsersPage() {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      password: user.password,
+      password: "",
       company: (user.company as Company) || "",
       role: user.role,
     });
     setEditUser(user);
   };
 
-  // Global stats
   const stats = {
     total: users.length,
     active: users.filter((u) => u.isActive).length,
@@ -285,9 +300,8 @@ export default function UsersPage() {
     ),
   };
 
-  // Per-company KPIs
   const companyStats = COMPANIES.map((company) => {
-    const companyUsers = users.filter((u) => (u as any).company === company);
+    const companyUsers = users.filter((u) => u.company === company);
     const activeCount = companyUsers.filter((u) => u.isActive).length;
     const totalCount = companyUsers.length;
     const activePercent = totalCount > 0 ? Math.round((activeCount / totalCount) * 100) : 0;
@@ -299,7 +313,6 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
@@ -324,7 +337,6 @@ export default function UsersPage() {
         )}
       </div>
 
-      {/* Company KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {companyStats.map(({ company, totalCount, activeCount, activePercent, totalUser }) => (
           <Card key={company}>
@@ -362,7 +374,6 @@ export default function UsersPage() {
         ))}
       </div>
 
-      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -391,131 +402,120 @@ export default function UsersPage() {
         </Select>
       </div>
 
-      {/* Users Table */}
-      <Card className="overflow-x-auto">
+      <Card>
         <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Utilisateur</TableHead>
-              <TableHead className="text-center">{t("common.role")}</TableHead>
-              <TableHead className="text-center">Entreprise</TableHead>
-              <TableHead className="text-center">{t("users.lastLogin")}</TableHead>
-              <TableHead className="text-center">Activité</TableHead>
-              <TableHead className="text-center">{t("common.status")}</TableHead>
-              {canManageUsers && <TableHead className="w-12" />}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              [...Array(5)].map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell><Skeleton className="h-10 w-40" /></TableCell>
-                  <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-6 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-2 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-6 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-8 w-8" /></TableCell>
-                </TableRow>
-              ))
-            ) : filteredUsers.length === 0 ? (
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                  {t("common.noData")}
-                </TableCell>
+                <TableHead>Utilisateur</TableHead>
+                <TableHead className="text-center">{t("common.role")}</TableHead>
+                <TableHead className="text-center">Entreprise</TableHead>
+                <TableHead className="text-center">Dernière connexion</TableHead>
+                <TableHead className="text-center">{t("common.status")}</TableHead>
+                {canManageUsers && <TableHead className="w-12" />}
               </TableRow>
-            ) : (
-              filteredUsers.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarFallback className="bg-primary/10 text-primary">
-                          {getInitials(user.firstName, user.lastName)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium">
-                          {user.firstName} {user.lastName}
-                        </p>
-                        <p className="text-sm text-muted-foreground">{user.email}</p>
-                      </div>
-                    </div>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                [...Array(5)].map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell><Skeleton className="h-10 w-40" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    {canManageUsers && <TableCell><Skeleton className="h-8 w-8" /></TableCell>}
+                  </TableRow>
+                ))
+              ) : filteredUsers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={canManageUsers ? 6 : 5} className="h-24 text-center text-muted-foreground">
+                    {t("common.noData")}
                   </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant={roleBadgeVariants[user.role]}>
-                      {roleLabels[user.role]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {(user as any).company ? (
-                      <Badge variant={companyBadgeVariants[(user as any).company as Company]}>
-                        {(user as any).company}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-center text-muted-foreground">
-                    {formatDate(user.lastLogin)}
-                  </TableCell>
-                  <TableCell className="text-center text-muted-foreground">
-                    <div className={`rounded-2xl text-center p-1 ${user.status=="en ligne" ? "bg-green-200 text-green-800" : "bg-red-200 text-red-800"}`}>
-                      {user.status || "-"}
-                    </div>
-                  </TableCell>
-
-                  <TableCell className="text-center">
-                    <Badge variant={user.isActive ? "default" : "secondary"}>
-                      {user.isActive ? t("users.active") : t("users.inactive")}
-                    </Badge>
-                  </TableCell>
-                  {canManageUsers && (
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>{t("common.actions")}</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => openEditSheet(user)}>
-                            <Edit className="mr-2 h-4 w-4" />
-                            {t("common.edit")}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleToggleStatus(user)}>
-                            <Power className="mr-2 h-4 w-4" />
-                            {user.isActive ? "Désactiver" : "Activer"}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onClick={() => setDeleteUser(user)}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            {t("common.delete")}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  )}
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : (
+                filteredUsers.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarFallback className="bg-primary/10 text-primary">
+                            {getInitials(user.firstName, user.lastName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium">
+                            {user.firstName} {user.lastName}
+                          </p>
+                          <p className="text-sm text-muted-foreground">{user.email}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant={roleBadgeVariants[user.role]}>
+                        {roleLabels[user.role]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {user.company ? (
+                        <Badge variant={companyBadgeVariants[user.company as Company]}>
+                          {user.company}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center text-muted-foreground">
+                      {formatDate(user.lastLogin)}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant={user.isActive ? "default" : "secondary"}>
+                        {user.isActive ? t("users.active") : t("users.inactive")}
+                      </Badge>
+                    </TableCell>
+                    {canManageUsers && (
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>{t("common.actions")}</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => openEditSheet(user)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              {t("common.edit")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleToggleStatus(user)}>
+                              <Power className="mr-2 h-4 w-4" />
+                              {user.isActive ? "Désactiver" : "Activer"}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {/* <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() => setDeleteUser(user)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              {t("common.delete")}
+                            </DropdownMenuItem> */}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </div>
       </Card>
 
-      {/* ─── Create Sheet ─── */}
+      {/* Create Sheet  */}
       <Sheet open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <SheetContent
           side="right"
-          // Full width on mobile, fixed 480px on sm+
           className="w-screen! sm:w-120! max-w-none! sm:max-w-120! flex flex-col p-0 overflow-hidden"
         >
           <SheetHeader className="px-5 py-4 border-b shrink-0">
@@ -529,7 +529,7 @@ export default function UsersPage() {
           </SheetHeader>
 
           <div className="flex-1 overflow-y-auto">
-            <UserForm formData={formData} setFormData={setFormData} t={t} />
+            <UserForm formData={formData} setFormData={setFormData} t={t} isEditMode={false} />
           </div>
 
           <SheetFooter className="px-5 py-4 border-t shrink-0 flex flex-row gap-3 sm:gap-2">
@@ -537,13 +537,13 @@ export default function UsersPage() {
               {t("common.cancel")}
             </Button>
             <Button className="flex-1" onClick={handleCreate} disabled={isProcessing}>
-              {t("common.create")}
+              {isProcessing ? "Création..." : t("common.create")}
             </Button>
           </SheetFooter>
         </SheetContent>
       </Sheet>
 
-      {/* ─── Edit Sheet ─── */}
+      {/* Edit Sheet  */}
       <Sheet open={!!editUser} onOpenChange={() => setEditUser(null)}>
         <SheetContent
           side="right"
@@ -560,7 +560,7 @@ export default function UsersPage() {
           </SheetHeader>
 
           <div className="flex-1 overflow-y-auto">
-            <UserForm formData={formData} setFormData={setFormData} t={t} />
+            <UserForm formData={formData} setFormData={setFormData} t={t} isEditMode={true} />
           </div>
 
           <SheetFooter className="px-5 py-4 border-t shrink-0 flex flex-row gap-3 sm:gap-2">
@@ -568,19 +568,24 @@ export default function UsersPage() {
               {t("common.cancel")}
             </Button>
             <Button className="flex-1" onClick={handleEdit} disabled={isProcessing}>
-              {t("common.save")}
+              {isProcessing ? "Enregistrement..." : t("common.save")}
             </Button>
           </SheetFooter>
         </SheetContent>
       </Sheet>
 
-      {/* ─── Delete Confirmation ─── */}
+      {/* Delete Confirmation  */}
       <AlertDialog open={!!deleteUser} onOpenChange={() => setDeleteUser(null)}>
         <AlertDialogContent className="w-[calc(100vw-2rem)] max-w-md mx-auto">
           <AlertDialogHeader>
-            <AlertDialogTitle>{t("users.deleteUser")}</AlertDialogTitle>
+            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("users.confirmDelete")}
+              Êtes-vous sûr de vouloir supprimer l&apos;utilisateur{" "}
+              <span className="font-semibold">
+                {deleteUser?.firstName} {deleteUser?.lastName}
+              </span> ?
+              <br />
+              Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
@@ -588,8 +593,9 @@ export default function UsersPage() {
             <AlertDialogAction
               onClick={handleDelete}
               className="w-full sm:w-auto bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isProcessing}
             >
-              {t("common.delete")}
+              {isProcessing ? "Suppression..." : t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -597,6 +603,8 @@ export default function UsersPage() {
     </div>
   );
 }
+
+type TFunction = ReturnType<typeof useI18n>["t"];
 
 interface UserFormProps {
   formData: {
@@ -608,14 +616,13 @@ interface UserFormProps {
     role: UserRole;
   };
   setFormData: React.Dispatch<React.SetStateAction<UserFormProps["formData"]>>;
-  t: (key: Parameters<ReturnType<typeof useI18n>["t"]>[0]) => string;
+  t: TFunction;
+  isEditMode?: boolean;
 }
 
-function UserForm({ formData, setFormData, t }: UserFormProps) {
+function UserForm({ formData, setFormData, t, isEditMode = false }: UserFormProps) {
   return (
     <div className="px-5 py-5 space-y-5">
-
-      {/* Section : Identité */}
       <div className="space-y-1.5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
@@ -645,7 +652,6 @@ function UserForm({ formData, setFormData, t }: UserFormProps) {
         </div>
       </div>
 
-      {/* Section : Contact */}
       <div className="space-y-1.5">
         <div className="space-y-4">
           <div className="space-y-2">
@@ -662,30 +668,32 @@ function UserForm({ formData, setFormData, t }: UserFormProps) {
               }
             />
           </div>
+          {!isEditMode &&
           <div className="space-y-2">
-            <Label htmlFor="password">Mot de passe *</Label>
+            <Label htmlFor="password">
+              Mot de passe  *
+              
+            </Label>
             <Input
               id="password"
               type="password"
-              required
+              required={!isEditMode}
+              placeholder={isEditMode ? "Laissez vide pour ne pas modifier" : ""}
               value={formData.password}
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, password: e.target.value }))
               }
             />
           </div>
+}
         </div>
       </div>
 
-      {/* Section : Organisation */}
       <div className="space-y-1.5">
         <div className="space-y-4">
-
-          {/* Entreprise + Rôle : toujours en colonne sur mobile, côte à côte sur sm+ */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="company">Entreprise</Label>
-              {/* w-full force le trigger à occuper toute la cellule */}
               <Select
                 value={formData.company}
                 onValueChange={(value: string) =>
@@ -730,7 +738,6 @@ function UserForm({ formData, setFormData, t }: UserFormProps) {
           </div>
         </div>
       </div>
-
     </div>
   );
 }
