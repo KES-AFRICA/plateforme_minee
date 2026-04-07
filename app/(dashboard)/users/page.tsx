@@ -402,7 +402,6 @@ export default function UsersPage() {
               <TableHead className="text-center">Entreprise</TableHead>
               <TableHead className="text-center">{t("users.lastLogin")}</TableHead>
               <TableHead className="text-center">Activité</TableHead>
-              <TableHead className="text-center">{t("common.status")}</TableHead>
               {canManageUsers && <TableHead className="w-12" />}
             </TableRow>
           </TableHeader>
@@ -461,11 +460,7 @@ export default function UsersPage() {
                   <TableCell className="text-center text-muted-foreground">
                     {formatDate(user.lastLogin)}
                   </TableCell>
-                  <TableCell className="text-center text-muted-foreground">
-                    <div className={`rounded-2xl text-center p-1 ${user.status=="en ligne" ? "bg-green-200 text-green-800" : "bg-red-200 text-red-800"}`}>
-                      {user.status || "-"}
-                    </div>
-                  </TableCell>
+
 
                   <TableCell className="text-center">
                     <Badge variant={user.isActive ? "default" : "secondary"}>
