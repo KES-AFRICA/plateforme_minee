@@ -1,4 +1,3 @@
-
 import {
   ApiResponse,
   PaginatedResponse,
@@ -20,23 +19,55 @@ interface UserFilters {
 // Helper pour mapper role_id (backend) → UserRole (frontend)
 function mapRoleIdToUserRole(roleId: number): UserRole {
   switch (roleId) {
-    case 1: return 'admin';
-    case 2: return 'team_lead';
-    case 3: return 'validation_agent';
-    case 4: return 'processing_agent';
-    default: return 'processing_agent';
+    case 1: return 'Admin';
+    case 2: return 'Chef équipe';
+    case 3: return 'Agent validation';
+    case 4: return 'Agent traitement';
+    default: return 'Agent traitement';
   }
 }
 
 // Helper pour mapper UserRole → role_id (backend)
 function mapRoleToRoleId(role: UserRole): number {
   switch (role) {
-    case 'admin': return 1;
-    case 'team_lead': return 2;
-    case 'validation_agent': return 3;
-    case 'processing_agent': return 4;
+    case 'Admin': return 1;
+    case 'Chef équipe': return 2;
+    case 'Agent validation': return 3;
+    case 'Agent traitement': return 4;
     default: return 4;
   }
+}
+
+// Interface pour la réponse brute du backend
+interface RawUser {
+  id: string;
+  email: string;
+  full_name: string;
+  company: string;
+  role_id: number;
+  is_active: boolean;
+  last_login?: string;
+}
+
+function mapRawUserToUser(rawUser: RawUser): User {
+  const nameParts = rawUser.full_name.split(' ');
+  return {
+    id: rawUser.id,
+    email: rawUser.email,
+    firstName: nameParts[0] || '',
+    lastName: nameParts.slice(1).join(' ') || '',
+    company: rawUser.company,
+    role: mapRoleIdToUserRole(rawUser.role_id),
+    isActive: rawUser.is_active,
+    lastLogin: rawUser.last_login || undefined,
+    createdAt: new Date().toISOString(),
+    tasksAssigned: 0,
+    tasksCompleted: 0,
+    occupancyRate: 0,
+    status: rawUser.is_active ? 'en ligne' : 'hors ligne',
+    phone: '',
+    password: '',
+  };
 }
 
 class UserService {
@@ -48,28 +79,11 @@ class UserService {
     pagination?: { page?: number; pageSize?: number }
   ): Promise<ApiResponse<PaginatedResponse<User>>> {
     try {
-      // Appel à l'API réelle
-      const usersData = await api.get<any[]>('/auth/users');
+      const usersData = await api.get<RawUser[]>('/auth/users');
       
-      // Transformation des données backend → format frontend
-      let users: User[] = usersData.map((u: any) => ({
-        id: u.id,
-        email: u.email,
-        firstName: u.full_name.split(' ')[0] || '',
-        lastName: u.full_name.split(' ').slice(1).join(' ') || '',
-        company: u.company,
-        role: mapRoleIdToUserRole(u.role_id),
-        isActive: u.is_active,
-        createdAt: new Date().toISOString(),
-        tasksAssigned: 0,
-        tasksCompleted: 0,
-        occupancyRate: 0,
-        status: 'hors ligne',
-        phone: '', 
-        password:'',
-      }));
+      let users: User[] = usersData.map(mapRawUserToUser);
 
-      // Filtrage côté frontend (si nécessaire)
+      // Filtrage côté frontend
       if (filters.role) {
         users = users.filter(u => u.role === filters.role);
       }
@@ -85,7 +99,14 @@ class UserService {
         );
       }
 
-      // Pagination côté frontend (simple)
+      // Tri par date de dernière connexion (plus récente en premier)
+      users.sort((a, b) => {
+        if (!a.lastLogin && !b.lastLogin) return 0;
+        if (!a.lastLogin) return 1;
+        if (!b.lastLogin) return -1;
+        return new Date(b.lastLogin).getTime() - new Date(a.lastLogin).getTime();
+      });
+
       const page = pagination?.page || 1;
       const pageSize = pagination?.pageSize || 10;
       const total = users.length;
@@ -109,14 +130,10 @@ class UserService {
 
   async getUserById(id: string): Promise<ApiResponse<User>> {
     try {
-      const users = await this.getUsers();
-      if (users.data) {
-        const user = users.data.data.find(u => u.id === id);
-        if (user) return { data: user };
-      }
-      return { error: 'User not found' };
-    } catch {
-      return { error: 'User not found' };
+      const rawUser = await api.get<RawUser>(`/auth/users/${id}`);
+      return { data: mapRawUserToUser(rawUser) };
+    } catch (error: any) {
+      return { error: error.message || 'User not found' };
     }
   }
 
@@ -124,54 +141,69 @@ class UserService {
     try {
       const payload = {
         email: userData.email,
-        full_name: `${userData.firstName} ${userData.lastName}`,
+        full_name: `${userData.firstName} ${userData.lastName}`.trim(),
         company: userData.company,
         role_id: mapRoleToRoleId(userData.role!),
-        password: userData.password, // Mot de passe obligatoire
+        password: userData.password,
       };
-      await api.post('/auth/users', payload);
-      // Après création, on ne retourne pas l'utilisateur du backend, on simule un retour
-      const newUser: User = {
-        id: 'temp-id', // ne sera pas utilisé en vrai
-        email: userData.email!,
-        firstName: userData.firstName!,
-        lastName: userData.lastName!,
-        role: userData.role!,
-        company: userData.company!,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        tasksAssigned: 0,
-        tasksCompleted: 0,
-        occupancyRate: 0,
-        status: 'hors ligne',
-        phone: '',
-        password:'',
-      };
-      return { data: newUser };
+      
+      const createdUser = await api.post<RawUser>('/auth/users', payload);
+      return { data: mapRawUserToUser(createdUser) };
     } catch (error: any) {
       return { error: error.message || 'Erreur lors de la création' };
     }
   }
 
-  // Les méthodes update, delete, toggle restent mockées (en attente des endpoints backend)
-  async updateUser(id: string, updates: Partial<User>): Promise<ApiResponse<User>> {
-    // TODO: appeler PUT /auth/users/{id} quand disponible
-    return { error: 'Not implemented yet' };
-  }
+  // ✅ Mise à jour d'un utilisateur (édition complète + activation/désactivation)
 
+async updateUser(id: string, updates: Partial<User>): Promise<ApiResponse<User>> {
+  try {
+    // Construire le payload pour le backend
+    const payload: any = {};
+    
+    if (updates.email !== undefined) payload.email = updates.email;
+    if (updates.firstName !== undefined || updates.lastName !== undefined) {
+      const firstName = updates.firstName ?? '';
+      const lastName = updates.lastName ?? '';
+      payload.full_name = `${firstName} ${lastName}`.trim();
+      
+    }
+    if (updates.company !== undefined) payload.company = updates.company;
+    if (updates.role !== undefined) payload.role_id = mapRoleToRoleId(updates.role);
+    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+    
+    // Pas besoin de récupérer l'utilisateur avant, on fait direct le PUT
+    const updatedUser = await api.put<RawUser>(`/auth/users/${id}`, payload);
+    return { data: mapRawUserToUser(updatedUser) };
+  } catch (error: any) {
+    return { error: error.message || 'Erreur lors de la mise à jour' };
+  }
+}
+
+
+
+  // ✅ Suppression d'un utilisateur
   async deleteUser(id: string): Promise<ApiResponse<void>> {
-    // TODO: appeler DELETE /auth/users/{id} quand disponible
-    return { error: 'Not implemented yet' };
+    try {
+      await api.delete(`/auth/users/${id}`);
+      return { data: undefined };
+    } catch (error: any) {
+      return { error: error.message || 'Erreur lors de la suppression' };
+    }
   }
 
-  async toggleUserStatus(id: string): Promise<ApiResponse<User>> {
-    // TODO: appeler PATCH /auth/users/{id}/toggle quand disponible
-    return { error: 'Not implemented yet' };
+  // ✅ Activation/Désactivation via updateUser (PUT /auth/users/{id})
+async toggleUserStatus(id: string, currentIsActive: boolean): Promise<ApiResponse<User>> {
+  try {
+    // Inverser le statut
+    return this.updateUser(id, { isActive: !currentIsActive });
+  } catch (error: any) {
+    return { error: error.message || 'Erreur lors du changement de statut' };
   }
+}
 
   // Statistiques (mockées, à remplacer plus tard)
   async getAgentStats(startDate?: Date, endDate?: Date): Promise<ApiResponse<AgentStats[]>> {
-    // Garde l'ancien mock (inchangé)
     let filteredTasks = [...this.tasks];
     if (startDate && endDate) {
       filteredTasks = filteredTasks.filter(task => {
@@ -181,6 +213,7 @@ class UserService {
           (completedAt && isWithinInterval(completedAt, { start: startDate, end: endDate }));
       });
     }
+    
     const updatedStats = mockAgentStats.map(stat => {
       const userTasks = filteredTasks.filter(task => task.assignedTo === stat.userId);
       const tasksAssigned = userTasks.length;
@@ -219,7 +252,6 @@ class UserService {
   }
 
   async getUserStats(userId: string, startDate?: Date, endDate?: Date): Promise<ApiResponse<AgentStats>> {
-    // Mock identique à l'original
     let filteredTasks = [...this.tasks];
     if (startDate && endDate) {
       filteredTasks = filteredTasks.filter(task => {
@@ -227,10 +259,13 @@ class UserService {
         return isWithinInterval(createdAt, { start: startDate, end: endDate });
       });
     }
+    
     const userTasks = filteredTasks.filter(task => task.assignedTo === userId);
-    const usersRes = await this.getUsers();
-    const user = usersRes.data?.data.find(u => u.id === userId);
+    const userResult = await this.getUserById(userId);
+    const user = userResult.data;
+    
     if (!user) return { error: "User not found" };
+    
     const tasksAssigned = userTasks.length;
     const tasksCompleted = userTasks.filter(task => 
       task.status === "completed" || task.status === "validated"
@@ -257,13 +292,23 @@ class UserService {
     if (tasksCompleted > 0) {
       efficiency = Math.round((tasksValidated / tasksCompleted) * 100);
     }
-    const stats: AgentStats = { userId, user, tasksAssigned, tasksCompleted, tasksValidated, tasksRejected, occupancyRate, avgProcessingTime, efficiency };
+    
+    const stats: AgentStats = { 
+      userId, 
+      user, 
+      tasksAssigned, 
+      tasksCompleted, 
+      tasksValidated, 
+      tasksRejected, 
+      occupancyRate, 
+      avgProcessingTime, 
+      efficiency 
+    };
     return mockApiResponse(stats);
   }
 
-  // Agents de traitement : filtre depuis l'API réelle
   async getProcessingAgents(): Promise<ApiResponse<User[]>> {
-    const res = await this.getUsers({ role: 'processing_agent', isActive: true });
+    const res = await this.getUsers({ role: 'Agent traitement', isActive: true });
     if (res.data) {
       return { data: res.data.data };
     }
@@ -271,7 +316,7 @@ class UserService {
   }
 
   async getValidationAgents(): Promise<ApiResponse<User[]>> {
-    const res = await this.getUsers({ role: 'validation_agent', isActive: true });
+    const res = await this.getUsers({ role: 'Agent validation', isActive: true });
     if (res.data) {
       return { data: res.data.data };
     }

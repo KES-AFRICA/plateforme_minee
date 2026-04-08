@@ -30,10 +30,10 @@ export function useRoleGuard() {
     perms.some((p) => hasPermission(p));
 
   // ── Raccourcis rôles ──────────────────────────────────────────────────────
-  const isAdmin           = hasRole("admin");
-  const isTeamLead        = hasRole("team_lead");
-  const isValidationAgent = hasRole("validation_agent");
-  const isProcessingAgent = hasRole("processing_agent");
+  const isAdmin           = hasRole("Admin");
+  const isTeamLead        = hasRole("Chef équipe");
+  const isValidationAgent = hasRole("Agent validation");
+  const isProcessingAgent = hasRole("Agent traitement");
 
   // ── Raccourcis actions métier ─────────────────────────────────────────────
   /** Peut effectuer des actions de traitement (chef d'équipe, agent traitement) */
