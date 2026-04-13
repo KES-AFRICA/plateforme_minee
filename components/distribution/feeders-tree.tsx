@@ -211,12 +211,13 @@ export function FeedersTree({ mode, selectedFeederId }: FeedersTreeProps) {
                         >
                           <Zap className="h-3 w-3 text-blue-500 shrink-0" />
                           <span className="truncate flex-1 text-left">{feeder.feeder_name}</span>
-                          {feeder.assigned_agent_name && feeder.assigned_agent_id === user?.id && (
+                          {/* {feeder.assigned_agent_name && feeder.assigned_agent_id === user?.id && (
                             <span className="text-[10px] text-green-600 flex items-center gap-0.5">
                               <User className="h-2.5 w-2.5" />
                               Moi
                             </span>
-                          )}
+                          )} */}
+                          
                           {feeder.assigned_agent_name && feeder.assigned_agent_id !== user?.id && user?.role !== 'Admin' && user?.role !== 'Chef équipe' ? null : feeder.assigned_agent_name && user?.role === 'Admin' && (
                             <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                               <User className="h-2.5 w-2.5" />

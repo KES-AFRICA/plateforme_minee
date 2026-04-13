@@ -1705,43 +1705,56 @@ if (feederStatus === "assigned") {
     }
     
     // En attente de validation
-    if (feederStatus === "pending_validation") {
-      if (user?.role === 'Admin' || user?.role === 'Chef équipe' || user?.role === 'Agent validation') {
-        return (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-3 text-sm text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg">
-              <Timer className="h-4 w-4" />
-              <span>Temps de traitement: <span className="font-mono font-medium text-foreground">{formatDuration(durationSeconds)}</span></span>
-            </div>
-            <div className="flex flex-col md:flex-row gap-2">
-              <Button onClick={handleStartTreatment} className="gap-2 bg-emerald-600 hover:bg-emerald-700 cursor-pointer" disabled={startMutation.isPending}>
-                {startMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                Remettre en traitement
-              </Button>
-<div className="flex items-center gap-2 "  >
-                <Button onClick={handleValidate} className="w-1/2 gap-2 bg-emerald-600 hover:bg-emerald-700 cursor-pointer" >
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-                Valider
-              </Button>
-              <Button onClick={handleReject} variant="outline" className="w-1/2 gap-2 border-red-300 text-red-600 hover:bg-red-600 hover:text-white cursor-pointer">
-                <X className="h-4 w-4 mr-2" />
-                Rejeter
-              </Button>
-</div>
-            </div>
+if (feederStatus === "pending_validation") {
+  if (user?.role === 'Admin' || user?.role === 'Chef équipe' || user?.role === 'Agent validation') {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground bg-muted/30 px-3 py-2 rounded-lg">
+          <div className="flex items-center gap-2">
+            <Timer className="h-4 w-4" />
+            <span>Temps de traitement: <span className="font-mono font-medium text-foreground">{formatDuration(durationSeconds)}</span></span>
           </div>
-        );
-      }
-      return (
-        <div className="flex items-center gap-3">
-          <Badge className="bg-yellow-100 text-yellow-700">En attente de validation</Badge>
-          <span className="text-sm text-muted-foreground flex items-center gap-1">
-            <Timer className="h-3 w-3" />
-            {formatDuration(durationSeconds)}
-          </span>
+          {(user?.role === 'Admin' || user?.role === 'Chef équipe') && (
+            <Button
+              onClick={() => setIsReassignDialogOpen(true)}
+              variant="outline"
+              size="sm"
+              className="gap-2 cursor-pointer shrink-0"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Réassigner
+            </Button>
+          )}
         </div>
-      );
-    }
+        <div className="flex flex-col md:flex-row gap-2">
+          <Button onClick={handleStartTreatment} className="gap-2 bg-emerald-600 hover:bg-emerald-700 cursor-pointer" disabled={startMutation.isPending}>
+            {startMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Remettre en traitement
+          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleValidate} className="w-1/2 gap-2 bg-emerald-600 hover:bg-emerald-700 cursor-pointer">
+              <CheckCircle2 className="h-4 w-4 mr-2" />
+              Valider
+            </Button>
+            <Button onClick={handleReject} variant="outline" className="w-1/2 gap-2 border-red-300 text-red-600 hover:bg-red-600 hover:text-white cursor-pointer">
+              <X className="h-4 w-4 mr-2" />
+              Rejeter
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-3">
+      <Badge className="bg-yellow-100 text-yellow-700">En attente de validation</Badge>
+      <span className="text-sm text-muted-foreground flex items-center gap-1">
+        <Timer className="h-3 w-3" />
+        {formatDuration(durationSeconds)}
+      </span>
+    </div>
+  );
+}
     
     return null;
   };
