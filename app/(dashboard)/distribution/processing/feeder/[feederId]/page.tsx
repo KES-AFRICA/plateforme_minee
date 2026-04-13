@@ -1241,9 +1241,7 @@ export default function FeederProcessingPage() {
   
   const processingAgents = useMemo(() => {
     if (!usersData?.data) return [];
-    return usersData.data.filter((u: any) => 
-      u.role !== "Admin"
-    );
+    return usersData.data;
   }, [usersData]);
   
   const mapEquipments = useMemo(() => convertToMapEquipments(comparisonResult), [comparisonResult]);
@@ -1667,23 +1665,32 @@ export default function FeederProcessingPage() {
       );
     }
     
-    // Assigné
-    if (feederStatus === "assigned") {
-      if (user?.id === assignedAgentId) {
-        return (
-          <Button onClick={handleStartTreatment} className="gap-2 bg-emerald-600 hover:bg-emerald-700 cursor-pointer" disabled={startMutation.isPending}>
-            {startMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
-            Débuter le traitement
-          </Button>
-        );
-      }
-      return (
-        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-          Assigné à {assignedAgentName}
-        </Badge>
-      );
-    }
-
+if (feederStatus === "assigned") {
+  return (
+    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+      {user?.id === assignedAgentId && (
+        <Button onClick={handleStartTreatment} className="gap-2 bg-emerald-600 hover:bg-emerald-700 cursor-pointer" disabled={startMutation.isPending}>
+          {startMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
+          Débuter le traitement
+        </Button>
+      )}
+      <Badge variant="outline" className="justify-center bg-amber-50 text-amber-700 border-amber-200 py-1.5 px-3">
+        <User className="h-3 w-3 mr-1.5 shrink-0" />
+        Assigné à {assignedAgentName}
+      </Badge>
+      {(user?.role === 'Admin' || user?.role === 'Chef équipe') && (
+        <Button
+          onClick={() => setIsReassignDialogOpen(true)}
+          variant="outline"
+          className="gap-2 cursor-pointer shrink-0"
+        >
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Réassigner
+        </Button>
+      )}
+    </div>
+  );
+}
     // En cours de traitement
     if (feederStatus === "in_progress") {
       if (user?.id === assignedAgentId) {
