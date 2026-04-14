@@ -547,7 +547,7 @@ function DetailSheet({
                     poste.genie_civil.voies.observation) && (
                     <div className="border rounded-lg p-3">
                       <p className="text-sm font-medium mb-2">Voies d'accès</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                         <Field label="Type" value={poste.genie_civil.voies.type} />
                         <Field label="Largeur" value={poste.genie_civil.voies.largeur ? `${poste.genie_civil.voies.largeur} m` : null} />
                         <Field label="Longueur" value={poste.genie_civil.voies.longueur ? `${poste.genie_civil.voies.longueur} m` : null} />
@@ -584,7 +584,7 @@ function DetailSheet({
                     poste.genie_civil.batiment.etat_acces) && (
                     <div className="border rounded-lg p-3">
                       <p className="text-sm text-black font-bold mb-2">Bâtiment</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-4 lg:grid-cols-5 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
                         <Field label="Toiture" value={poste.genie_civil.batiment.toiture} />
                         <Field label="Peinture extérieure" value={poste.genie_civil.batiment.peinture_exterieur} />
                         <Field label="État peinture ext" value={poste.genie_civil.batiment.etat_peinture_ext} />
@@ -621,7 +621,7 @@ function DetailSheet({
                     poste.genie_civil.equipements_local.coffret) && (
                     <div className="border rounded-lg p-3">
                       <p className="text-sm text-black font-bold mb-2">Équipements locaux</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                         <Field label="Interrupteurs" value={poste.genie_civil.equipements_local.interrupteurs} />
                         <Field label="Lampes" value={poste.genie_civil.equipements_local.lampes} />
                         <Field label="État lampes" value={poste.genie_civil.equipements_local.etat_lampes} />
@@ -673,17 +673,18 @@ function DetailSheet({
                   <h3 className="text-xs text-black font-bold uppercase tracking-wider border-b pb-1">
                     Busbars ({poste.busbars.length})
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3">
                     {poste.busbars.map((busbar: Busbar) => (
-                      <div key={busbar.id} className="border rounded-lg p-3 bg-muted/10 hover:shadow-md transition-shadow">
-                        <p className="text-sm font-semibold text-blue-600">{busbar.name || busbar.id}</p>
-                        <div className="mt-2 space-y-1 text-xs">
-                          <p><span className="text-muted-foreground">ID:</span> {busbar.id}</p>
+                      <div key={busbar.id} className="border rounded-lg p-2 bg-muted/10 hover:shadow-md transition-shadow">
+                       
+                        <div className="mt-2 flex flex-col md:flex-row gap-3 text-xs">
+                           <p className="text-sm font-semibold text-blue-600">{busbar.name || busbar.id}</p>
+                          <p><span className="text-sm font-bold text-black">ID:</span> {busbar.id}</p>
                           {busbar.voltage_level && (
-                            <p><span className="text-muted-foreground">Tension:</span> {busbar.voltage_level} kV</p>
+                            <p><span className=" text-sm font-bold text-black">Tension:</span> {busbar.voltage_level} kV</p>
                           )}
                           {busbar.phase && (
-                            <p><span className="text-muted-foreground">Phase:</span> {busbar.phase}</p>
+                            <p><span className="text-sm font-bold text-black">Phase:</span> {busbar.phase}</p>
                           )}
                         </div>
                       </div>
@@ -833,7 +834,7 @@ function DetailSheet({
                     Client commercial
                   </h3>
                   {/* Données d'abord */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <Field label="Nom client" value={poste.client_commercial.nom_client} />
                     <Field label="Type client" value={poste.client_commercial.type_client} />
                     <Field label="Activité" value={poste.client_commercial.activite} />
