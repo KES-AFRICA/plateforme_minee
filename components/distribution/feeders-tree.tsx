@@ -221,7 +221,7 @@ export function FeedersTree({ mode, selectedFeederId }: FeedersTreeProps) {
                           {feeder.assigned_agent_name && feeder.assigned_agent_id !== user?.id && user?.role !== 'Admin' && user?.role !== 'Chef équipe' ? null : feeder.assigned_agent_name && user?.role === 'Admin' && (
                             <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                               <User className="h-2.5 w-2.5" />
-                              {feeder.assigned_agent_name.split(' ')[0]}
+                              {/* {feeder.assigned_agent_name.split(' ')[0]} */}
                             </span>
                           )}
                         </button>
