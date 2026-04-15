@@ -22,6 +22,7 @@ export interface EquipmentDetail {
   anomalies: AnomalyItem[];
   photo?: string | null;
   location?: { lat: number; lng: number };
+  
 }
 
 // Types pour l'arborescence des feeders
