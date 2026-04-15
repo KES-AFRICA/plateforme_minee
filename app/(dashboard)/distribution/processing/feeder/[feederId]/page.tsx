@@ -1816,7 +1816,16 @@ export default function FeederProcessingPage() {
     <div className="w-full min-w-0 space-y-4 px-2 sm:px-4 md:px-6 py-4">
       {/* ─── En-tête ────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+
         <div className="min-w-0">
+                  <div className="flex items-center gap-3">
+          <button
+            onClick={refresh}
+            className="flex items-center gap-1 text-sm px-3 py-1 rounded border hover:bg-muted disabled:opacity-50"
+          >
+             Actualiser
+          </button>
+        </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Zap className="h-5 w-5 text-primary shrink-0" />
             <h1 className="text-base sm:text-lg font-bold truncate">{feederName}</h1>
