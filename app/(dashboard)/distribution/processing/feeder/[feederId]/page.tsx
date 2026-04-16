@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
@@ -10,7 +10,7 @@ import {
   X, Check, Zap, Building2, Cable, Box, ToggleLeft,
   Layers, Info, MapPin, Save, UserCheck, Filter,
   Play, Timer, User, RefreshCw,
-  Loader2
+  Loader2, Search, History, Clock, ChevronUp
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -84,6 +84,15 @@ interface TreatmentState {
     treated: boolean;
     editedFields: Record<string, string>;
   };
+}
+
+interface RecentEdit {
+  mrid: string | number;
+  name: string;
+  table: string;
+  editedAt: number;
+  fieldsChanged: string[];
+  equipment: EquipmentDetail;
 }
 
 // ─── Durée ────────────────────────────────────────────────────────────
@@ -167,6 +176,255 @@ function AnomalyBadge({ type }: { type: AnomalyType }) {
   );
 }
 
+// ─── KPIs par type d'équipement ───────────────────────────────────────
+function EquipmentTypeKPIs({ allAnomalies }: { allAnomalies: AnomalyItem[] }) {
+  const equipmentTypes = [
+    { table: "feeder", label: "Départs", icon: Zap },
+    { table: "substation", label: "Postes", icon: Building2 },
+    { table: "bay", label: "Cellules", icon: Box },
+    { table: "powertransformer", label: "Transfo.", icon: Zap },
+    { table: "switch", label: "Switchs", icon: ToggleLeft },
+    { table: "wire", label: "Câbles", icon: Cable },
+    { table: "bus_bar", label: "Bus Bars", icon: Layers },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
+      {equipmentTypes.map(({ table, label, icon: Icon }) => {
+        const items = allAnomalies.filter(a => a.table === table);
+        const total = items.length;
+        const conformes = items.filter(a => a.type === "ok").length;
+        const nonConformes = total - conformes;
+        if (total === 0) return null;
+        return (
+          <div key={table} className="rounded-xl border border-border bg-card p-3 space-y-2">
+            <div className="flex items-center gap-1.5">
+              <div className="p-1 rounded-md bg-primary/10">
+                <Icon className="h-3 w-3 text-primary" />
+              </div>
+              <span className="text-xs font-semibold text-foreground truncate">{label}</span>
+            </div>
+            <p className="text-xl font-bold leading-none">{total}</p>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-emerald-600 font-medium flex items-center gap-1">
+                  <CheckCircle2 className="h-2.5 w-2.5" />{conformes} conf.
+                </span>
+                {nonConformes > 0 && (
+                  <span className="text-red-500 font-medium flex items-center gap-1">
+                    <AlertCircle className="h-2.5 w-2.5" />{nonConformes} n.c.
+                  </span>
+                )}
+              </div>
+              <div className="w-full h-1 rounded-full bg-border overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                  style={{ width: total > 0 ? `${(conformes / total) * 100}%` : "0%" }}
+                />
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Barre de recherche puissante ─────────────────────────────────────
+function EquipmentSearchBar({
+  allAnomalies,
+  onEquipmentClick,
+}: {
+  allAnomalies: AnomalyItem[];
+  onEquipmentClick: (equipment: EquipmentDetail) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const results = useMemo(() => {
+    if (!query.trim() || query.length < 2) return [];
+    const q = query.toLowerCase();
+    return allAnomalies
+      .filter(a => {
+        const name = (a.name || "").toLowerCase();
+        const mrid = String(a.mrid || "").toLowerCase();
+        const tableLabel = (TABLE_LABELS[a.table] || a.table).toLowerCase();
+        const dataName = (a.data?.name || a.collected_data?.name || a.reference_data?.name || "").toLowerCase();
+        return name.includes(q) || mrid.includes(q) || tableLabel.includes(q) || dataName.includes(q);
+      })
+      .slice(0, 20);
+  }, [query, allAnomalies]);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const buildEquipmentDetail = (anomaly: AnomalyItem): EquipmentDetail => {
+    const collectedData = anomaly.collected_data || {};
+    const referenceData = anomaly.reference_data || {};
+    const directData = anomaly.data || {};
+    let recordData: Record<string, any> = {};
+    if (anomaly.type === "missing") recordData = { ...directData, ...referenceData };
+    else if (anomaly.type === "new") recordData = { ...directData, ...collectedData };
+    else if (anomaly.type === "divergence") recordData = { ...referenceData, ...collectedData };
+    else if (anomaly.type === "duplicate") recordData = { ...collectedData };
+    else recordData = { ...directData, ...collectedData };
+    const photoUrl = collectedData.photo || directData.photo || null;
+    return {
+      id: anomaly.mrid, mrid: anomaly.mrid, table: anomaly.table,
+      name: anomaly.name || recordData.name || String(anomaly.mrid),
+      data: { ...recordData, _anomalyType: anomaly.type },
+      anomalies: [anomaly], photo: photoUrl,
+      location: recordData.latitude && recordData.longitude
+        ? { lat: parseFloat(String(recordData.latitude)), lng: parseFloat(String(recordData.longitude)) }
+        : undefined,
+    };
+  };
+
+  const handleSelect = (anomaly: AnomalyItem) => {
+    const equipment = buildEquipmentDetail(anomaly);
+    onEquipmentClick(equipment);
+    setIsOpen(false);
+    setQuery("");
+  };
+
+  const anomalyCfg = (type: AnomalyType) => KPI_CONFIG.find(k => k.type === type)!;
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          ref={inputRef}
+          value={query}
+          onChange={e => { setQuery(e.target.value); setIsOpen(true); }}
+          onFocus={() => query.length >= 2 && setIsOpen(true)}
+          placeholder="Rechercher un équipement par nom, M-RID, type… (poste, cellule, switch, câble…)"
+          className="pl-9 pr-4 h-10 text-sm"
+        />
+        {query && (
+          <button onClick={() => { setQuery(""); setIsOpen(false); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {isOpen && results.length > 0 && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-xl border border-border bg-card shadow-xl overflow-hidden max-h-80 overflow-y-auto">
+          <div className="px-3 py-1.5 border-b border-border/50 bg-muted/20">
+            <span className="text-[10px] text-muted-foreground font-medium">{results.length} résultat{results.length > 1 ? "s" : ""} trouvé{results.length > 1 ? "s" : ""}</span>
+          </div>
+          {results.map(anomaly => {
+            const cfg = anomalyCfg(anomaly.type);
+            const Icon = TABLE_ICONS[anomaly.table] || Box;
+            const CfgIcon = cfg.icon;
+            return (
+              <button
+                key={anomaly.id}
+                onClick={() => handleSelect(anomaly)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/30 transition-colors text-left border-b border-border/20 last:border-0 cursor-pointer"
+              >
+                <div className="p-1.5 rounded-lg bg-primary/10 shrink-0">
+                  <Icon className="h-3.5 w-3.5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{anomaly.name || anomaly.mrid}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[10px] text-muted-foreground">{TABLE_LABELS[anomaly.table] || anomaly.table}</span>
+                    <span className="text-[10px] text-muted-foreground/50">·</span>
+                    <span className="text-[10px] font-mono text-muted-foreground/70 truncate">{anomaly.mrid}</span>
+                  </div>
+                </div>
+                <span className={cn("inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0", cfg.bg, cfg.color)}>
+                  <CfgIcon className="h-2.5 w-2.5" />{cfg.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {isOpen && query.length >= 2 && results.length === 0 && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-xl border border-border bg-card shadow-xl p-6 text-center">
+          <Search className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">Aucun équipement trouvé pour <strong>"{query}"</strong></p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Historique des modifications récentes ────────────────────────────
+function RecentEditsPanel({
+  recentEdits,
+  onEquipmentClick,
+}: {
+  recentEdits: RecentEdit[];
+  onEquipmentClick: (equipment: EquipmentDetail) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  if (recentEdits.length === 0) return null;
+
+  const formatTime = (ts: number) => {
+    const diff = Date.now() - ts;
+    if (diff < 60000) return "à l'instant";
+    if (diff < 3600000) return `il y a ${Math.floor(diff / 60000)}min`;
+    return `il y a ${Math.floor(diff / 3600000)}h`;
+  };
+
+  return (
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex w-full items-center gap-2 px-4 py-2.5 hover:bg-muted/20 transition-colors cursor-pointer"
+      >
+        <History className="h-4 w-4 text-primary" />
+        <span className="font-semibold text-sm flex-1 text-left">Modifications récentes</span>
+        <Badge className="bg-amber-100 text-amber-700 border-amber-200">{recentEdits.length}</Badge>
+        {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+      </button>
+      {isOpen && (
+        <div className="border-t border-border/40 divide-y divide-border/20 max-h-64 overflow-y-auto">
+          {recentEdits.map((edit, idx) => {
+            const Icon = TABLE_ICONS[edit.table] || Box;
+            return (
+              <button
+                key={idx}
+                onClick={() => onEquipmentClick(edit.equipment)}
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20 transition-colors text-left cursor-pointer"
+              >
+                <div className="p-1.5 rounded-lg bg-amber-500/10 shrink-0">
+                  <Icon className="h-3.5 w-3.5 text-amber-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{edit.name}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[10px] text-muted-foreground">{TABLE_LABELS[edit.table]}</span>
+                    <span className="text-[10px] text-muted-foreground/50">·</span>
+                    <span className="text-[10px] text-muted-foreground">{edit.fieldsChanged.length} champ{edit.fieldsChanged.length > 1 ? "s" : ""} modifié{edit.fieldsChanged.length > 1 ? "s" : ""}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0 text-[10px] text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  {formatTime(edit.editedAt)}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Dialog assignation ────────────────────────────────────────────────
 function AssignDialog({
   isOpen, onClose, onAssign, feederName, processingAgents, isAssigning, currentUser, isReassign = false,
@@ -247,7 +505,7 @@ function OccurrenceEditCard({
   occurrence,
   index,
   canEdit,
-  onSave,
+  onSaveSuccess,
   feederId,
   equipmentTable,
   user,
@@ -256,7 +514,7 @@ function OccurrenceEditCard({
   occurrence: any;
   index: number;
   canEdit: boolean;
-  onSave: (mrid: string, updatedData: Record<string, unknown>) => void;
+  onSaveSuccess: (mrid: string, updatedData: Record<string, unknown>) => void;
   feederId: string;
   equipmentTable: string;
   user: any;
@@ -269,10 +527,11 @@ function OccurrenceEditCard({
   ]);
   const LOCATION_FIELDS = new Set(["latitude", "longitude"]);
 
-  const record = occurrence.full_record || {};
+  // On utilise un state local pour le record afin de refléter immédiatement les saves
+  const [localRecord, setLocalRecord] = useState<Record<string, any>>({ ...(occurrence.full_record || {}) });
   const mrid = occurrence.m_rid;
 
-  const [editedData, setEditedData] = useState<Record<string, unknown>>({ ...record });
+  const [editedData, setEditedData] = useState<Record<string, any>>({ ...localRecord });
   const [isSaving, setIsSaving] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -282,16 +541,16 @@ function OccurrenceEditCard({
     if (Array.isArray(photo) && photo.length > 0) return buildPhotoUrl(photo[0]);
     return null;
   };
-  const photoUrl = getPhotoUrl(record.photo);
+  const photoUrl = getPhotoUrl(localRecord.photo);
 
   const editableFields = useMemo(() => {
-    return Object.keys(record).filter(k =>
+    return Object.keys(localRecord).filter(k =>
       !HIDDEN_FIELDS.has(k) && !LOCATION_FIELDS.has(k)
     );
-  }, [record]);
+  }, [localRecord]);
 
-  const fieldsWithValue = editableFields.filter(k => record[k] !== null && record[k] !== undefined && record[k] !== "");
-  const fieldsWithoutValue = editableFields.filter(k => record[k] === null || record[k] === undefined || record[k] === "");
+  const fieldsWithValue = editableFields.filter(k => localRecord[k] !== null && localRecord[k] !== undefined && localRecord[k] !== "");
+  const fieldsWithoutValue = editableFields.filter(k => localRecord[k] === null || localRecord[k] === undefined || localRecord[k] === "");
 
   const handleFieldChange = (field: string, value: unknown) =>
     setEditedData(prev => ({ ...prev, [field]: value }));
@@ -306,7 +565,7 @@ function OccurrenceEditCard({
     if (!user) { toast.error("Utilisateur non connecté"); return; }
     setIsSaving(true);
     const changedFields = editableFields.filter(field =>
-      String(editedData[field]) !== String(record[field])
+      String(editedData[field]) !== String(localRecord[field])
     );
     if (changedFields.length === 0) { toast.info("Aucune modification"); setIsSaving(false); return; }
     const sqlTableName = TABLE_NAME_MAP[equipmentTable] ?? equipmentTable;
@@ -323,15 +582,20 @@ function OccurrenceEditCard({
           comment: `Correction doublon occurrence #${index + 1}`,
         })
       ));
+      // ✅ Mise à jour locale immédiate — pas de refresh nécessaire
+      const updatedRecord = { ...localRecord };
+      changedFields.forEach(f => { updatedRecord[f] = editedData[f]; });
+      setLocalRecord(updatedRecord);
+      setEditedData({ ...updatedRecord });
       toast.success(`Occurrence #${index + 1} — ${changedFields.length} champ(s) enregistré(s)`);
-      onSave(mrid, editedData);
+      onSaveSuccess(mrid, updatedRecord);
     } catch {
       toast.error("Erreur lors de l'enregistrement");
     }
     setIsSaving(false);
   };
 
-  const hasChanges = editableFields.some(f => String(editedData[f]) !== String(record[f]));
+  const hasChanges = editableFields.some(f => String(editedData[f]) !== String(localRecord[f]));
 
   return (
     <div className="border border-purple-200 dark:border-purple-800 rounded-xl overflow-hidden bg-purple-50/30 dark:bg-purple-950/10">
@@ -353,13 +617,13 @@ function OccurrenceEditCard({
         </div>
       )}
 
-      {(record.latitude || record.longitude) && (
+      {(localRecord.latitude || localRecord.longitude) && (
         <div className="px-3 pt-3">
           <div className="p-2 rounded-lg bg-muted/30 flex items-center gap-2 text-xs">
             <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
             <span className="font-mono text-muted-foreground">
-              {record.latitude ? parseFloat(String(record.latitude)).toFixed(6) : "—"},{" "}
-              {record.longitude ? parseFloat(String(record.longitude)).toFixed(6) : "—"}
+              {localRecord.latitude ? parseFloat(String(localRecord.latitude)).toFixed(6) : "—"},{" "}
+              {localRecord.longitude ? parseFloat(String(localRecord.longitude)).toFixed(6) : "—"}
             </span>
             <span className="text-[10px] text-muted-foreground ml-auto">non modifiable</span>
           </div>
@@ -370,7 +634,7 @@ function OccurrenceEditCard({
         {fieldsWithValue.map(field => {
           const inputType = getFieldInputType(field);
           const value = editedData[field];
-          const originalValue = record[field];
+          const originalValue = localRecord[field];
           const isModified = String(value) !== String(originalValue);
 
           return (
@@ -479,6 +743,8 @@ function EquipmentDetailSheet({
   feederId: string; user: any; updateAttributeMutation: any;
 }) {
   const [editedData, setEditedData] = useState<Record<string, unknown>>({});
+  // State local pour refléter immédiatement les saves sans refresh
+  const [localData, setLocalData] = useState<Record<string, unknown>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenPhoto, setFullscreenPhoto] = useState<string | null>(null);
@@ -524,7 +790,10 @@ function EquipmentDetailSheet({
   }, [equipment, editedData, divergentFieldNames]);
 
   useEffect(() => {
-    if (equipment) setEditedData({ ...equipment.data });
+    if (equipment) {
+      setLocalData({ ...equipment.data });
+      setEditedData({ ...equipment.data });
+    }
   }, [equipment]);
 
   if (!equipment) return null;
@@ -551,8 +820,37 @@ function EquipmentDetailSheet({
     setEditedData((prev) => ({ ...prev, [field]: value }));
 
   const handleSave = async () => {
+    if (!user) { toast.error("Utilisateur non connecté"); return; }
     setIsSaving(true);
-    onSave(equipment, editedData);
+    // Cherche les champs changés par rapport au localData (pas equipment.data)
+    const changedFields = Object.keys(editedData).filter(
+      key => String(editedData[key]) !== String(localData[key]) && key !== "_anomalyType" && key !== "photo"
+    );
+    if (changedFields.length === 0) { toast.info("Aucune modification détectée"); setIsSaving(false); return; }
+    const sqlTableName = TABLE_NAME_MAP[equipment.table] ?? equipment.table;
+    try {
+      await Promise.all(changedFields.map(field =>
+        updateAttributeMutation.mutateAsync({
+          feeder_id: feederId,
+          table_name: sqlTableName,
+          record_id: String(equipment.mrid),
+          attribute_name: field,
+          new_value: editedData[field],
+          changed_by: user.id,
+          changed_by_name: `${user.firstName} ${user.lastName}`,
+          comment: `Modification depuis l'interface de traitement`,
+        })
+      ));
+      // ✅ Mise à jour locale immédiate — BD à jour + UI à jour sans refresh
+      const updatedData = { ...localData };
+      changedFields.forEach(f => { updatedData[f] = editedData[f]; });
+      setLocalData(updatedData);
+      setEditedData({ ...updatedData });
+      toast.success(`${changedFields.length} champ(s) modifié(s) avec succès`);
+      onSave(equipment, updatedData);
+    } catch {
+      toast.error("Erreur lors de la modification");
+    }
     setIsSaving(false);
     onClose();
   };
@@ -599,7 +897,9 @@ function EquipmentDetailSheet({
                       occurrence={occ}
                       index={idx}
                       canEdit={!!canEdit}
-                      onSave={(mrid, data) => {}}
+                      onSaveSuccess={(mrid, data) => {
+                        // propagation vers le parent si besoin
+                      }}
                       feederId={feederId}
                       equipmentTable={equipment.table}
                       user={user}
@@ -715,7 +1015,7 @@ function EquipmentDetailSheet({
                 {allFields.map((field) => {
                   const value = editedData[field];
                   if (value === undefined) return null;
-                  const originalValue = equipment.data[field];
+                  const originalValue = localData[field];
                   const isModified = String(value) !== String(originalValue);
                   const inputType = getFieldInputType(field);
                   const isDivergentField = divergentFieldNames.has(field);
@@ -991,7 +1291,7 @@ function SwitchItem({ switchAnomaly, treatment, onFieldChange, onMarkTreated, on
   );
 }
 
-// ─── BayItem avec SwitchItem utilisé ───────────────────────────────────
+// ─── BayItem ──────────────────────────────────────────────────────────
 function BayItem({ bayAnomaly, switches, filter, treatment, onFieldChange, onMarkTreated, onEquipmentClick, isClickable, canProcess }: {
   bayAnomaly: AnomalyItem;
   switches: AnomalyItem[];
@@ -1007,11 +1307,13 @@ function BayItem({ bayAnomaly, switches, filter, treatment, onFieldChange, onMar
   const Icon = TABLE_ICONS["bay"] || Box;
   const bayName = bayAnomaly.name || bayAnomaly.mrid;
 
+  // Filtre strict : si filtre actif, on n'affiche que les switchs qui correspondent
   const filteredSwitches = useMemo(() => {
     if (filter === "all") return switches;
     return switches.filter(s => s.type === filter);
   }, [switches, filter]);
 
+  // Si filtre actif : on n'affiche la bay que si elle-même ou ses switchs correspondent
   if (filter !== "all" && bayAnomaly.type !== filter && filteredSwitches.length === 0) return null;
 
   return (
@@ -1028,15 +1330,18 @@ function BayItem({ bayAnomaly, switches, filter, treatment, onFieldChange, onMar
 
       {isOpen && (
         <div className="pl-6 pr-3 py-2 space-y-2 border-t border-border/30">
-          <AnomalyCard
-            anomaly={bayAnomaly}
-            treatment={treatment}
-            onFieldChange={onFieldChange}
-            onMarkTreated={onMarkTreated}
-            onEquipmentClick={onEquipmentClick}
-            isClickable={isClickable}
-            canProcess={canProcess}
-          />
+          {/* N'affiche la bayCard que si son type correspond au filtre (ou filtre=all) */}
+          {(filter === "all" || bayAnomaly.type === filter) && (
+            <AnomalyCard
+              anomaly={bayAnomaly}
+              treatment={treatment}
+              onFieldChange={onFieldChange}
+              onMarkTreated={onMarkTreated}
+              onEquipmentClick={onEquipmentClick}
+              isClickable={isClickable}
+              canProcess={canProcess}
+            />
+          )}
           {filteredSwitches.length > 0 && (
             <div className="space-y-2 ml-2">
               {filteredSwitches.map(switchAnomaly => (
@@ -1059,7 +1364,7 @@ function BayItem({ bayAnomaly, switches, filter, treatment, onFieldChange, onMar
   );
 }
 
-// ─── SubstationItem - Version corrigée ────────────────────────────────────
+// ─── SubstationItem ────────────────────────────────────────────────────
 function SubstationItem({ substationAnomaly, bays, transformers, busbars, switchesByBay, filter, treatment, onFieldChange, onMarkTreated, onEquipmentClick, isClickable, canProcess }: {
   substationAnomaly: AnomalyItem;
   bays: AnomalyItem[];
@@ -1074,16 +1379,20 @@ function SubstationItem({ substationAnomaly, bays, transformers, busbars, switch
   isClickable: boolean;
   canProcess: boolean;
 }) {
-  const [isOpen, setIsOpen] = useState(false); // Fermé par défaut
+  const [isOpen, setIsOpen] = useState(false);
   const Icon = TABLE_ICONS["substation"] || Building2;
   const substationName = substationAnomaly.name || substationAnomaly.mrid;
 
-
-  // Filtrer selon le type d'anomalie sélectionné
+  // Filtre strict sur chaque catégorie d'enfants
   const filteredBays = useMemo(() => {
     if (filter === "all") return bays;
-    return bays.filter(b => b.type === filter);
-  }, [bays, filter]);
+    return bays.filter(b => {
+      if (b.type === filter) return true;
+      // Garde la bay si elle a des switchs qui correspondent
+      const baySwitches = switchesByBay.get(b.mrid) || [];
+      return baySwitches.some(s => s.type === filter);
+    });
+  }, [bays, filter, switchesByBay]);
 
   const filteredTransformers = useMemo(() => {
     if (filter === "all") return transformers;
@@ -1096,9 +1405,10 @@ function SubstationItem({ substationAnomaly, bays, transformers, busbars, switch
   }, [busbars, filter]);
 
   const hasChildren = filteredBays.length > 0 || filteredTransformers.length > 0 || filteredBusbars.length > 0;
-  
-  // Si filtre actif et aucun enfant correspondant + substation non concernée, on cache
-  if (filter !== "all" && substationAnomaly.type !== filter && !hasChildren) return null;
+  const substationMatchesFilter = filter === "all" || substationAnomaly.type === filter;
+
+  // Cache la substation si elle ne correspond pas au filtre et n'a pas d'enfants correspondants
+  if (!substationMatchesFilter && !hasChildren) return null;
 
   return (
     <div className="rounded-lg border border-border/60 overflow-hidden">
@@ -1114,23 +1424,24 @@ function SubstationItem({ substationAnomaly, bays, transformers, busbars, switch
             {substationAnomaly.data.type}
           </span>
         )}
-        <AnomalyBadge type={substationAnomaly.type} />
+        
       </button>
 
       {isOpen && (
         <div className="p-3 space-y-3 border-t border-border/40">
-          {/* Toujours afficher la substation elle-même avec sa photo si elle existe */}
-          <AnomalyCard
-            anomaly={substationAnomaly}
-            treatment={treatment}
-            onFieldChange={onFieldChange}
-            onMarkTreated={onMarkTreated}
-            onEquipmentClick={onEquipmentClick}
-            isClickable={isClickable}
-            canProcess={canProcess}
-          />
+          {/* N'affiche la carte substation que si son type correspond au filtre */}
+          {substationMatchesFilter && (
+            <AnomalyCard
+              anomaly={substationAnomaly}
+              treatment={treatment}
+              onFieldChange={onFieldChange}
+              onMarkTreated={onMarkTreated}
+              onEquipmentClick={onEquipmentClick}
+              isClickable={isClickable}
+              canProcess={canProcess}
+            />
+          )}
 
-          {/* Transformateurs - toujours affichés (même les ok) */}
           {filteredTransformers.length > 0 && (
             <div className="space-y-2">
               <div className="text-xs font-medium text-muted-foreground pl-2">Transformateurs</div>
@@ -1140,7 +1451,6 @@ function SubstationItem({ substationAnomaly, bays, transformers, busbars, switch
             </div>
           )}
 
-          {/* Bus Bars */}
           {filteredBusbars.length > 0 && (
             <div className="space-y-2">
               <div className="text-xs font-medium text-muted-foreground pl-2">Bus Bars</div>
@@ -1150,7 +1460,6 @@ function SubstationItem({ substationAnomaly, bays, transformers, busbars, switch
             </div>
           )}
 
-          {/* Cellules avec leurs switchs - fermées par défaut */}
           {filteredBays.length > 0 && (
             <div className="space-y-2">
               <div className="text-xs font-medium text-muted-foreground pl-2">Cellules</div>
@@ -1213,7 +1522,7 @@ function SubstationsRootGroup({ substationsList, switchesByBay, filter, treatmen
       >
         {isOpen ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
         <Building2 className="h-4 w-4 shrink-0 text-primary" />
-        <span className="font-semibold text-sm flex-1">Postes sources (Substations)</span>
+        <span className="font-semibold text-sm flex-1">Postes (Substations)</span>
         <div className="flex items-center gap-2">
           {substationsWithIssues > 0 && (
             <span className="text-[10px] text-amber-600">{substationsWithIssues} avec anomalie{substationsWithIssues > 1 ? "s" : ""}</span>
@@ -1262,7 +1571,6 @@ function WireRootGroup({ wires, filter, treatment, onFieldChange, onMarkTreated,
 
   const filteredWires = useMemo(() => {
     if (filter === "all") return wires;
-    if (filter === "ok") return wires.filter(w => w.type === "ok");
     return wires.filter(w => w.type === filter);
   }, [wires, filter]);
 
@@ -1322,7 +1630,6 @@ function FeederRootGroup({ feeders, filter, treatment, onFieldChange, onMarkTrea
 
   const filteredFeeders = useMemo(() => {
     if (filter === "all") return feeders;
-    if (filter === "ok") return feeders.filter(f => f.type === "ok");
     return feeders.filter(f => f.type === filter);
   }, [feeders, filter]);
 
@@ -1455,6 +1762,8 @@ export default function FeederProcessingPage() {
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
+  // Historique des modifications récentes
+  const [recentEdits, setRecentEdits] = useState<RecentEdit[]>([]);
 
   const feederStatus = treatmentStatus?.status || "collecting";
   const assignedAgentId = treatmentStatus?.assigned_to;
@@ -1470,7 +1779,7 @@ export default function FeederProcessingPage() {
   const mapEquipments = useMemo(() => convertToMapEquipments(comparisonResult, activeFilter), [comparisonResult, activeFilter]);
 
   useEffect(() => {
-    if (feederId) { setTreatment({}); refetchUsers(); refetchStatus(); }
+    if (feederId) { setTreatment({}); setRecentEdits([]); refetchUsers(); refetchStatus(); }
   }, [feederId, refetchUsers, refetchStatus]);
 
   // ─── Conversion anomalies ─────────────────────────────────────────────
@@ -1497,7 +1806,7 @@ export default function FeederProcessingPage() {
     return anomalies;
   }, [comparisonResult]);
 
-  // ─── Regroupement par substation avec les bonnes clés ─────────────────
+  // ─── Regroupement par substation ─────────────────────────────────────
   const { substationsList, switchesByBay } = useMemo(() => {
     const substations = allAnomalies.filter(a => a.table === "substation");
     const bays = allAnomalies.filter(a => a.table === "bay");
@@ -1513,15 +1822,9 @@ export default function FeederProcessingPage() {
     }>();
 
     for (const substation of substations) {
-      substationMap.set(substation.mrid, {
-        substation,
-        bays: [],
-        transformers: [],
-        busbars: [],
-      });
+      substationMap.set(substation.mrid, { substation, bays: [], transformers: [], busbars: [] });
     }
 
-    // Récupérer substation_id depuis les données (clé: substation_id)
     const getSubstationId = (anomaly: AnomalyItem): string | null => {
       return anomaly.reference_data?.substation_id
         || anomaly.reference_data?.substations_m_rid
@@ -1534,26 +1837,17 @@ export default function FeederProcessingPage() {
 
     for (const bay of bays) {
       const substationId = getSubstationId(bay);
-      if (substationId && substationMap.has(substationId)) {
-        substationMap.get(substationId)!.bays.push(bay);
-      }
+      if (substationId && substationMap.has(substationId)) substationMap.get(substationId)!.bays.push(bay);
     }
-
     for (const transformer of transformers) {
       const substationId = getSubstationId(transformer);
-      if (substationId && substationMap.has(substationId)) {
-        substationMap.get(substationId)!.transformers.push(transformer);
-      }
+      if (substationId && substationMap.has(substationId)) substationMap.get(substationId)!.transformers.push(transformer);
     }
-
     for (const busbar of busbars) {
       const substationId = getSubstationId(busbar);
-      if (substationId && substationMap.has(substationId)) {
-        substationMap.get(substationId)!.busbars.push(busbar);
-      }
+      if (substationId && substationMap.has(substationId)) substationMap.get(substationId)!.busbars.push(busbar);
     }
 
-    // Regrouper les switchs par bay (clé: bay_id)
     const switchesByBayMap = new Map<string, AnomalyItem[]>();
     for (const switchAnomaly of switches) {
       const bayId = switchAnomaly.reference_data?.bay_id
@@ -1566,10 +1860,7 @@ export default function FeederProcessingPage() {
       }
     }
 
-    return {
-      substationsList: Array.from(substationMap.values()),
-      switchesByBay: switchesByBayMap,
-    };
+    return { substationsList: Array.from(substationMap.values()), switchesByBay: switchesByBayMap };
   }, [allAnomalies]);
 
   const feeders = useMemo(() => allAnomalies.filter(a => a.table === "feeder"), [allAnomalies]);
@@ -1633,16 +1924,26 @@ export default function FeederProcessingPage() {
   const handleValidate = () => toast.warning("en cours de développement");
   const handleReject = () => toast.warning("en cours de développement");
 
-  const handleEquipmentSave = (equipment: EquipmentDetail, updatedData: Record<string, unknown>) => {
-    if (!user) { toast.error("Utilisateur non connecté"); return; }
-    const originalData = equipment.data;
-    const changedFields = Object.keys(updatedData).filter(key => originalData[key] !== updatedData[key] && key !== "_anomalyType" && key !== "photo");
-    if (changedFields.length === 0) { toast.info("Aucune modification détectée"); return; }
-    const sqlTableName = TABLE_NAME_MAP[equipment.table] ?? equipment.table;
-    Promise.all(changedFields.map(field =>
-      updateAttributeMutation.mutateAsync({ feeder_id: feederId, table_name: sqlTableName, record_id: String(equipment.mrid), attribute_name: field, new_value: updatedData[field], changed_by: user.id, changed_by_name: `${user.firstName} ${user.lastName}`, comment: `Modification depuis l'interface de traitement` })
-    )).then(() => { toast.success(`${changedFields.length} champ(s) modifié(s)`); refresh(); }).catch(() => toast.error("Erreur lors de la modification"));
-  };
+  const handleEquipmentSave = useCallback((equipment: EquipmentDetail, updatedData: Record<string, unknown>) => {
+    // Calcule les champs modifiés pour l'historique
+    const changedFields = Object.keys(updatedData).filter(
+      key => String(updatedData[key]) !== String(equipment.data[key]) && key !== "_anomalyType" && key !== "photo"
+    );
+    if (changedFields.length === 0) return;
+
+    // ✅ Ajoute à l'historique des modifications récentes
+    setRecentEdits(prev => {
+      const filtered = prev.filter(e => e.mrid !== equipment.mrid);
+      return [{
+        mrid: equipment.mrid,
+        name: equipment.name,
+        table: equipment.table,
+        editedAt: Date.now(),
+        fieldsChanged: changedFields,
+        equipment: { ...equipment, data: { ...equipment.data, ...updatedData } },
+      }, ...filtered].slice(0, 10); // garde les 10 dernières modifs
+    });
+  }, []);
 
   const handleFieldChange = useCallback((id: string, field: string, val: string) => {
     setTreatment((prev) => ({ ...prev, [id]: { treated: prev[id]?.treated ?? false, editedFields: { ...(prev[id]?.editedFields ?? {}), [field]: val } } }));
@@ -1816,16 +2117,15 @@ export default function FeederProcessingPage() {
     <div className="w-full min-w-0 space-y-4 px-2 sm:px-4 md:px-6 py-4">
       {/* ─── En-tête ────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-
         <div className="min-w-0">
-                  <div className="flex items-center gap-3">
-          <button
-            onClick={refresh}
-            className="flex items-center gap-1 text-sm px-3 py-1 rounded border hover:bg-muted disabled:opacity-50"
-          >
-             Actualiser
-          </button>
-        </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={refresh}
+              className="flex items-center gap-1 text-sm px-3 py-1 rounded border hover:bg-muted disabled:opacity-50"
+            >
+              Actualiser
+            </button>
+          </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Zap className="h-5 w-5 text-primary shrink-0" />
             <h1 className="text-base sm:text-lg font-bold truncate">{feederName}</h1>
@@ -1855,7 +2155,7 @@ export default function FeederProcessingPage() {
         </div>
       </div>
 
-      {/* ─── KPI Cards ──────────────────────────────────────────────── */}
+      {/* ─── KPI Cards anomalies ─────────────────────────────────────── */}
       <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-4 md:grid-cols-7 sm:gap-2">
         {KPI_CONFIG.map((cfg) => {
           const count = counts[cfg.type];
@@ -1902,7 +2202,22 @@ export default function FeederProcessingPage() {
         <FullscreenMap equipments={mapEquipments} onMarkerClick={() => {}} feederColor="#6366f1" />
       </div>
 
-      {/* ─── Arborescence à 3 groupes racines ─────────────────────────── */}
+      {/* ─── KPIs par type d'équipement ─────────────────────────────── */}
+      <EquipmentTypeKPIs allAnomalies={allAnomalies} />
+
+      {/* ─── Barre de recherche ──────────────────────────────────────── */}
+      <EquipmentSearchBar
+        allAnomalies={allAnomalies}
+        onEquipmentClick={handleEquipmentClick}
+      />
+
+      {/* ─── Historique des modifications ────────────────────────────── */}
+      <RecentEditsPanel
+        recentEdits={recentEdits}
+        onEquipmentClick={handleEquipmentClick}
+      />
+
+      {/* ─── Arborescence ─────────────────────────────────────────────── */}
       <div className="space-y-3">
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           {activeFilter === "all"
@@ -1913,7 +2228,6 @@ export default function FeederProcessingPage() {
           }
         </h2>
 
-        {/* Groupe 1: Départ */}
         <FeederRootGroup
           feeders={feeders}
           filter={activeFilter}
@@ -1925,7 +2239,6 @@ export default function FeederProcessingPage() {
           canProcess={isTreatmentActive && !!isTreatmentAllowed}
         />
 
-        {/* Groupe 2: Substations avec hiérarchie complète */}
         <SubstationsRootGroup
           substationsList={substationsList}
           switchesByBay={switchesByBay}
@@ -1938,7 +2251,6 @@ export default function FeederProcessingPage() {
           canProcess={isTreatmentActive && !!isTreatmentAllowed}
         />
 
-        {/* Groupe 3: Câbles */}
         <WireRootGroup
           wires={wires}
           filter={activeFilter}
