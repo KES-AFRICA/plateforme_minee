@@ -167,7 +167,7 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
                       {getActivityLabel(activity.type)}
                     </Badge>
                   </div>
-                  <p className="text-[11px] text-gray-600 dark:text-gray-400 truncate sm:text-sm">
+                  <p className="text-[11px] text-gray-600 dark:text-gray-400 wrap-break-word sm:text-sm">
                     {activity.message}
                   </p>
                   <p className="text-[10px] text-gray-500 dark:text-gray-500 mt-0.5 sm:text-xs sm:mt-1">
