@@ -144,9 +144,9 @@ export default function DashboardPage() {
       */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5 sm:gap-4">
         <StatCard
-          title="En collecte"
+          title="En attente de traitement"
           value={isDataLoading ? "-" : totalCollecting.toLocaleString() || "0"}
-          description="Collecte en cours"
+          description=""
           icon={Clock}
           variant="default"
           total={totalTasks}
