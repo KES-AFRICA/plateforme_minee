@@ -128,7 +128,7 @@ export default function DashboardPage() {
             className="shrink-0 gap-2"
           >
             <RefreshCw className={`h-4 w-4 ${isDataLoading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Actualiser</span>
+            <span className="">Actualiser</span>
           </Button>
         </div>
       </div>
