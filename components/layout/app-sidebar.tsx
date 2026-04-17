@@ -72,6 +72,7 @@ const roleLabels: Record<string, string> = {
   'Chef équipe':         "Chef d'équipe",
   'Agent validation':  "Agent de validation",
   'Agent traitement':  "Agent de traitement",
+  'Coordonateur':       "Coordonateur",
 };
 
 export function AppSidebar() {
