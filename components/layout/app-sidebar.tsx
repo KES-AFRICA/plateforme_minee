@@ -139,6 +139,17 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu className="pb-2 gap-0.5">
 
+              {canViewCollecte && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={pathname === "/collecte"} tooltip="Collecte terrain">
+                    <Link href="/collecte">
+                      <Database className="w-4 h-4" />
+                      <span>Collecte terrain</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
               {/* Dashboard */}
               {canViewDashboard && (
                 <SidebarMenuItem>
@@ -151,17 +162,6 @@ export function AppSidebar() {
                     <Link href="/dashboard">
                       <LayoutDashboard className="w-4 h-4" />
                       <span>{t("nav.dashboard")}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
-
-              {canViewCollecte && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={pathname === "/collecte"} tooltip="Collecte terrain">
-                    <Link href="/collecte">
-                      <Database className="w-4 h-4" />
-                      <span>Collecte terrain</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

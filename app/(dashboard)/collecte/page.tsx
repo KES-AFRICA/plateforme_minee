@@ -171,7 +171,7 @@ function DashboardSkeleton() {
         {[1, 2, 3].map(i => <div key={i} className="h-36 animate-pulse rounded-xl bg-muted" />)}
       </div>
       <div className="h-60 animate-pulse rounded-xl bg-muted" />
-      <div className="h-[480px] animate-pulse rounded-xl bg-muted" />
+      <div className="h-120 animate-pulse rounded-xl bg-muted" />
       <div className="h-40 animate-pulse rounded-xl bg-muted" />
     </div>
   );
@@ -265,7 +265,7 @@ export default function CollecteDashboardPage() {
         />
         <div className="relative flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-white/15">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15">
               <Database className="h-6 w-6 text-white" />
             </div>
             <div>
@@ -277,7 +277,7 @@ export default function CollecteDashboardPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="items-center gap-3 hidden">
             <select
               className="rounded-lg border border-white/25 bg-white/12 px-3 py-1.5 text-xs text-white outline-none"
               style={{ backdropFilter: "blur(8px)" }}
