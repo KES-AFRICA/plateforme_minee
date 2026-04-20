@@ -629,7 +629,7 @@ function OccurrenceEditCard({
   const HIDDEN_FIELDS = new Set([
     "qrcode", "precision", "photo", "exploitattion_m_rid", "collected_date",
     "collected_agent_name", "arrondissements_m_rid", "structure_m_rid",
-    "second_switch_m_rid", "pole_m_rid", "created_at", "created_date",
+    "second_switch_m_rid", "pole_m_rid", "created_at", "created_date","cacher","collected_by"
   ]);
   const LOCATION_FIELDS = new Set(["latitude", "longitude"]);
 
@@ -703,7 +703,6 @@ function OccurrenceEditCard({
     if (!user) { toast.error("Utilisateur non connecté"); return; }
     setIsSaving(true);
     const changedFields = editableFields.filter(field => String(editedData[field]) !== String(localRecord[field]));
-    if (changedFields.length === 0) { toast.info("Aucune modification"); setIsSaving(false); return; }
     const payload: Record<string, unknown> = { m_rid: mrid };
     changedFields.forEach(f => { payload[f] = editedData[f]; });
     try {
@@ -852,7 +851,7 @@ function OccurrenceEditCard({
         </div>
         {canEdit && (
           <div className="px-3 pb-3 border-t border-purple-200 dark:border-purple-800 pt-3">
-            <Button onClick={handleSave} disabled={isSaving || !hasChanges} size="sm" className="w-full cursor-pointer">
+            <Button onClick={handleSave} disabled={isSaving} size="sm" className="w-full cursor-pointer">
               {isSaving
                 ? <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />Enregistrement...</>
                 : <><Save className="h-3.5 w-3.5 mr-2" />Enregistrer l'occurrence #{index + 1}</>}
@@ -913,7 +912,7 @@ function EquipmentDetailSheet({
   const HIDDEN_FIELDS = new Set([
     "qrcode", "precision", "photo", "exploitattion_m_rid", "collected_date",
     "collected_agent_name", "arrondissements_m_rid", "structure_m_rid",
-    "second_switch_m_rid", "pole_m_rid"
+  "second_switch_m_rid", "pole_m_rid","cacher","collected_by"
   ]);
   const LOCATION_FIELDS = new Set(["latitude", "longitude"]);
 
@@ -1035,7 +1034,6 @@ function EquipmentDetailSheet({
     const changedFields = Object.keys(editedData).filter(
       key => String(editedData[key]) !== String(localData[key]) && key !== "_anomalyType" && key !== "photo"
     );
-    if (changedFields.length === 0) { toast.info("Aucune modification détectée"); setIsSaving(false); return; }
     const tableNameMapForPreSave: Record<string, string> = {
       substations: "substation", power_transformers: "powertransformer",
       busbar: "bus_bar", feeders: "feeder", bay: "bay", switch: "switch", wire: "wire",
@@ -2262,6 +2260,7 @@ export default function FeederProcessingPage() {
   const [isAssigning, setIsAssigning] = useState(false);
   const [recentEdits, setRecentEdits] = useState<RecentEdit[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   const feederStatus = treatmentStatus?.status || "collecting";
   const assignedAgentId = treatmentStatus?.assigned_to;
@@ -2612,7 +2611,7 @@ export default function FeederProcessingPage() {
     return null;
   };
 
-const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+
 
 useEffect(() => {
   if (!comparisonLoading && comparisonResult) {
