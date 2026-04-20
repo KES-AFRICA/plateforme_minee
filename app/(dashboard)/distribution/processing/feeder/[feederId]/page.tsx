@@ -130,7 +130,7 @@ const TABLE_LABELS: Record<string, string> = {
 const FL: Record<string, string> = {
   name: "Nom", code: "Code", type: "Type", voltage: "Tension (kV)", active: "Actif",
   created_date: "Créé le", display_scada: "SCADA", apparent_power: "Puissance (kVA)",
-  substation_id: "Poste source", feeder_id: "Départ", phase: "Phase",
+  substation_id: "Poste", feeder_id: "Départ", phase: "Phase",
   localisation: "Localisation", regime: "Régime", section: "Section",
   nature_conducteur: "Conducteur", height: "Hauteur (m)", latitude: "Latitude",
   longitude: "Longitude", highest_voltage_level: "U max (kV)", exploitation: "Exploitation",
@@ -138,7 +138,7 @@ const FL: Record<string, string> = {
   normal_open: "NO", bay_id: "Cellule", nature: "Nature", t1: "T1", t2: "T2",
   busbar_id1: "Bus bar 1", busbar_id2: "Bus bar 2", is_injection: "Injection",
   is_feederhead: "Tête départ", local_name: "Nom local", m_rid: "M-RID",
-  w1_voltage: "Tension primaire", w2_voltage: "Tension secondaire", substations_m_rid: "Poste source",
+  w1_voltage: "Tension primaire", w2_voltage: "Tension secondaire", substations_m_rid: "Poste",
 };
 const fl = (k: string) => FL[k] || k;
 const fv = (v: unknown): string => {
@@ -1827,7 +1827,7 @@ function SubstationDetailSheet({
               <section className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-primary" />
-                  <h3 className="text-sm font-semibold">Poste source</h3>
+                  <h3 className="text-sm font-semibold">Poste</h3>
                   <div className="h-px flex-1 bg-border/40" />
                 </div>
                 {getPhotoUrl(substationAnomaly) && (
