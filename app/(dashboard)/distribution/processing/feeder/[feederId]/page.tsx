@@ -1767,7 +1767,7 @@ function SubstationDetailSheet({
                   className={cn(
                     "gap-1.5 cursor-pointer",
                     "border-blue-300 text-blue-700 hover:bg-blue-50",
-                    "dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                    "dark:border-blue-700 text-blue-400 dark:hover:bg-blue-950/30 hover:text-blue-300"
                   )}
                 >
                   {isVerifying ? (
