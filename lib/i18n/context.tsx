@@ -39,13 +39,13 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
         if (value && typeof value === "object" && key in value) {
           value = (value as Record<string, unknown>)[key];
         } else {
-          console.warn(`Translation missing: ${path}`);
+          //console.warn(`Translation missing: ${path}`);
           return path;
         }
       }
 
       if (typeof value !== "string") {
-        console.warn(`Translation is not a string: ${path}`);
+        //console.warn(`Translation is not a string: ${path}`);
         return path;
       }
 

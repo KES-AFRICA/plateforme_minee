@@ -40,14 +40,14 @@ export function DateFilter({
 
       {/* Boutons de période — scrollable horizontalement sur petit écran */}
       <div className="w-full overflow-x-auto sm:overflow-visible">
-        <div className="flex min-w-max rounded-lg border border-border bg-background sm:min-w-0">
+        <div className="grid grid-cols-2 min-w-max rounded-lg border border-border bg-background sm:min-w-0">
           {rangeOptions.map((option) => (
             <Button
               key={option.value}
               variant="ghost"
               size="sm"
               className={cn(
-                "rounded-none first:rounded-l-lg last:rounded-r-lg px-3 text-xs sm:px-4 sm:text-sm whitespace-nowrap flex-1 sm:flex-none",
+                "rounded-none first:rounded-l-lg last:rounded-r-lg px-3 text-xs sm:px-4 sm:text-sm whitespace-nowrap flex-1",
                 dateRangeType === option.value && "bg-primary/10 text-primary"
               )}
               onClick={() => onRangeTypeChange(option.value)}

@@ -27,7 +27,7 @@ export default function LoginPage() {
   const getCurrentPosition = (): Promise<{ latitude: number; longitude: number }> => {
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
-        console.warn("Géolocalisation non supportée par le navigateur");
+        //console.warn("Géolocalisation non supportée par le navigateur");
         resolve({ latitude: 0, longitude: 0 });
         return;
       }
@@ -42,7 +42,7 @@ export default function LoginPage() {
           });
         },
         (error) => {
-          console.warn("Erreur de géolocalisation:", error.message);
+          //console.warn("Erreur de géolocalisation:", error.message);
           // En cas de refus ou d'erreur, on renvoie 0,0
           resolve({ latitude: 0, longitude: 0 });
         },

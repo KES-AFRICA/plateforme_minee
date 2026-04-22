@@ -66,6 +66,7 @@ import {
 } from "lucide-react";
 import { FeedersTree } from "../distribution/feeders-tree";
 import { cn } from "@/lib/utils";
+import { useSidebar } from "@/components/ui/sidebar"; // Import du hook useSidebar
 
 const roleLabels: Record<string, string> = {
   "Admin":             "Administrateur",
@@ -81,6 +82,7 @@ export function AppSidebar() {
   const { user, logout, hasPermission } = useAuth();
   const { t } = useI18n();
   const { unreadCount } = useNotificationContext();
+  const { setOpenMobile } = useSidebar(); // Récupération de la fonction pour fermer la sidebar mobile
 
   const [selectedFeederId, setSelectedFeederId] = useState<
     string | number | undefined
@@ -109,6 +111,11 @@ export function AppSidebar() {
 
   const isDistribProcessing = pathname.startsWith("/distribution/processing");
   const isDistribValidation = pathname.startsWith("/distribution/validation");
+
+  // Fonction pour fermer la sidebar en mobile et naviguer
+  const handleNavigation = () => {
+    setOpenMobile(false);
+  };
 
   // ── Calcul des permissions une seule fois ─────────────────────────────────
   const canViewDashboard   = hasPermission(PERMISSIONS.VIEW_DASHBOARD);
@@ -143,7 +150,7 @@ export function AppSidebar() {
               {canViewCollecte && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={pathname === "/collecte"} tooltip="Collecte terrain">
-                    <Link href="/collecte">
+                    <Link href="/collecte" onClick={handleNavigation}>
                       <Database className="w-4 h-4" />
                       <span>Collecte terrain</span>
                     </Link>
@@ -160,7 +167,7 @@ export function AppSidebar() {
                     tooltip="Tableau de bord"
                     className="hover:bg-sidebar-accent/50"
                   >
-                    <Link href="/dashboard">
+                    <Link href="/dashboard" onClick={handleNavigation}>
                       <LayoutDashboard className="w-4 h-4" />
                       <span>{t("nav.dashboard")}</span>
                     </Link>
@@ -222,6 +229,7 @@ export function AppSidebar() {
                                         <FeedersTree
                                           mode="processing"
                                           selectedFeederId={selectedFeederId}
+                                          onSelect={handleNavigation} // Passer la fonction au composant FeedersTree
                                         />
                                       </div>
                                     </div>
@@ -256,6 +264,7 @@ export function AppSidebar() {
                                         <FeedersTree
                                           mode="validation"
                                           selectedFeederId={selectedFeederId}
+                                          onSelect={handleNavigation} // Passer la fonction au composant FeedersTree
                                         />
                                       </div>
                                     </div>
@@ -323,7 +332,7 @@ export function AppSidebar() {
                                         }
                                         className="hover:bg-sidebar-accent/40"
                                       >
-                                        <Link href="/commercial/processing/verifications">
+                                        <Link href="/commercial/processing/verifications" onClick={handleNavigation}>
                                           <Eye className="w-4 h-4" />
                                           <span>Vérifications</span>
                                         </Link>
@@ -338,7 +347,7 @@ export function AppSidebar() {
                                         }
                                         className="hover:bg-sidebar-accent/40"
                                       >
-                                        <Link href="/commercial/processing/complex">
+                                        <Link href="/commercial/processing/complex" onClick={handleNavigation}>
                                           <AlertCircle className="w-4 h-4" />
                                           <span>Cas complexes</span>
                                         </Link>
@@ -353,7 +362,7 @@ export function AppSidebar() {
                                         }
                                         className="hover:bg-sidebar-accent/40"
                                       >
-                                        <Link href="/commercial/processing/rejets">
+                                        <Link href="/commercial/processing/rejets" onClick={handleNavigation}>
                                           <XCircle className="w-4 h-4" />
                                           <span>Rejets</span>
                                         </Link>
@@ -373,7 +382,7 @@ export function AppSidebar() {
                                 isActive={pathname === "/commercial/validation"}
                                 className="hover:bg-sidebar-accent/40"
                               >
-                                <Link href="/commercial/validation">
+                                <Link href="/commercial/validation" onClick={handleNavigation}>
                                   <CheckSquare className="w-4 h-4" />
                                   <span>{t("nav.validation")}</span>
                                 </Link>
@@ -396,7 +405,7 @@ export function AppSidebar() {
                     tooltip={t("nav.users")}
                     className="hover:bg-sidebar-accent/50"
                   >
-                    <Link href="/users">
+                    <Link href="/users" onClick={handleNavigation}>
                       <Users className="w-4 h-4" />
                       <span>{t("nav.users")}</span>
                     </Link>
@@ -413,7 +422,7 @@ export function AppSidebar() {
                     tooltip={t("nav.notifications")}
                     className="hover:bg-sidebar-accent/50"
                   >
-                    <Link href="/notifications" className="relative">
+                    <Link href="/notifications" onClick={handleNavigation} className="relative">
                       <Bell className="w-4 h-4" />
                       <span>{t("nav.notifications")}</span>
                       {unreadCount > 0 && (
@@ -438,7 +447,7 @@ export function AppSidebar() {
                     tooltip={t("nav.map")}
                     className="hover:bg-sidebar-accent/50"
                   >
-                    <Link href="/map">
+                    <Link href="/map" onClick={handleNavigation}>
                       <Map className="w-4 h-4" />
                       <span>{t("nav.map")}</span>
                     </Link>
@@ -498,7 +507,7 @@ export function AppSidebar() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href="/settings" className="cursor-pointer">
+                  <Link href="/settings" onClick={handleNavigation} className="cursor-pointer">
                     <Settings className="mr-2 h-4 w-4" />
                     {t("nav.settings")}
                   </Link>

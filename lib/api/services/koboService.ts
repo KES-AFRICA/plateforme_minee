@@ -1,6 +1,6 @@
 // ─── services/koboService.ts ──────────────────────────────────────────────────
 
-import { ApiError, PosteDetail, PostesMapResponse, WireDetail, WiresMapResponse } from "@/lib/types/kobo";
+import { ApiError, PosteDetail, PostesMapResponse, REASDetail, SupportDetail, WireDetail, WiresMapResponse } from "@/lib/types/kobo";
 
 
 
@@ -66,12 +66,94 @@ export async function fetchWiresMap(): Promise<WiresMapResponse> {
  *
  * @param wireId  ID Kobo du wire (ex: 217)
  */
+// Cache des longueurs par wireId
+const wireLengthCache = new Map<number, number>();
+
+// Fonction utilitaire pour calculer la distance Haversine (en km)
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Rayon de la Terre en km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+// Fonction pour calculer la longueur totale d'un wire (avec cache)
+function calculateWireLength(wire: WireDetail): number {
+  // Vérifier si déjà en cache
+  if (wireLengthCache.has(wire.id)) {
+    return wireLengthCache.get(wire.id)!;
+  }
+  
+  let totalLength = 0;
+  
+  // Utiliser les segments de la géométrie
+  const segments = wire.geometry?.segments ?? [];
+  
+  for (const segment of segments) {
+    const coords = segment.coordinates ?? [];
+    for (let i = 0; i < coords.length - 1; i++) {
+      const [lng1, lat1] = coords[i];
+      const [lng2, lat2] = coords[i+1];
+      totalLength += haversineDistance(lat1, lng1, lat2, lng2);
+    }
+  }
+  
+  // Stocker dans le cache
+  wireLengthCache.set(wire.id, totalLength);
+  
+  return totalLength;
+}
+
+// Fonction pour vider le cache (appeler lors du refresh)
+export function clearWireLengthCache(): void {
+  wireLengthCache.clear();
+}
+
+// Version modifiée de fetchWireDetail avec calcul de longueur et cache
 export async function fetchWireDetail(wireId: number): Promise<WireDetail> {
   if (!wireId) {
     throw new Error("wireId ne peut pas être vide.");
   }
-  return apiFetch<WireDetail>(`/wire/${encodeURIComponent(wireId)}`);
+  
+  const wire = await apiFetch<WireDetail>(`/wire/${encodeURIComponent(wireId)}`);
+  
+  // Calculer ou récupérer du cache la longueur
+  const length_km = calculateWireLength(wire);
+  
+  // Retourner le wire enrichi avec la longueur
+  return {
+    ...wire,
+    length_km,
+  };
 }
+
+// ── Fonctions de fetch ────────────────────────────────────────────────────────
+ 
+export async function fetchSupportDetail(
+  wireId: number,
+  tronconIndex: number,
+  supportIndex: number
+): Promise<SupportDetail> {
+  return apiFetch<SupportDetail>(
+    `/map/wires/${wireId}/support/${tronconIndex}/${supportIndex}`
+  );
+}
+ 
+export async function fetchREASDetail(
+  wireId: number,
+  tronconIndex: number
+): Promise<REASDetail> {
+  return apiFetch<REASDetail>(
+    `/map/wires/${wireId}/reas/${tronconIndex}`
+  );
+}
+ 
+
 
 // ── Utilitaire : construire l'URL complète d'une photo ─────────────────────────
 /**

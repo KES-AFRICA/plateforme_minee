@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from "framer-motion";
 interface FeedersTreeProps {
   mode: "processing" | "validation";
   selectedFeederId?: string | number;
+  onSelect?: () => void; // Ajout de la prop onSelect
 }
 
 interface FeederTreeGroup {
@@ -33,7 +34,7 @@ interface FeederTreeFeeder {
   treatment_status?: string | null;
 }
 
-export function FeedersTree({ mode, selectedFeederId }: FeedersTreeProps) {
+export function FeedersTree({ mode, selectedFeederId, onSelect }: FeedersTreeProps) {
   const router = useRouter();
   const { user } = useAuth();
   
@@ -130,6 +131,10 @@ setGroupedData(result);
 
   const handleFeederClick = (feederId: string, feederName: string) => {
     router.push(`/distribution/${mode}/feeder/${feederId}?name=${encodeURIComponent(feederName)}`);
+    // Appeler onSelect si fourni (pour fermer la sidebar en mobile)
+    if (onSelect) {
+      onSelect();
+    }
   };
 
   const toggleDecoupage = (decoupage: string) => {

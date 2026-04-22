@@ -151,7 +151,7 @@ export default function UsersPage() {
           setUsers(response.data.data.map(normalizeUser));
         }
       } catch (error) {
-        console.error("Failed to fetch users:", error);
+        //console.error("Failed to fetch users:", error);
         toast.error(t("errors.networkError"));
       } finally {
         setIsLoading(false);
@@ -206,7 +206,7 @@ export default function UsersPage() {
         setUsers(response.data.data.map(normalizeUser));
       }
     } catch (error) {
-      console.error("Failed to refresh users:", error);
+      //console.error("Failed to refresh users:", error);
     }
   };
 
