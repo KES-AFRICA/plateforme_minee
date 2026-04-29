@@ -1,144 +1,182 @@
-"use client";
+import {
+  Zap,
+  BarChart3,
+  Users,
+  Building2,
+  ChevronRight,
+  Clock,
+} from "lucide-react";
 
-import { useEffect, useRef } from "react";
-import { ArrowUpRight } from "lucide-react";
+export default function KpiCards({
+  feedersCollectes,
+  feedersAttendus,
+  feedersTaux,
+  equipesActives,
+  totalEquipes,
+  totalCollectes,
+  totalAttendus,
+  totalTaux,
+  derniereSoumission,
+}: {
+  feedersCollectes: number;
+  feedersAttendus: number;
+  feedersTaux: number;
+  equipesActives: number;
+  totalEquipes: number;
+  totalCollectes: number;
+  totalAttendus: number;
+  totalTaux: number;
+  derniereSoumission: string;
+}) {
+  const formatDerniereSoumission = (dateStr?: string) => {
+    if (!dateStr) return "Aucune soumission";
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60),
+    );
 
-// ─── Types ─────────────────────────────────────────────────────────────────
-export interface KpiCardProps {
-  label: string;
-  value: number | string;
-  total?: number;
-  unit?: string;
-  pct?: number;              // 0-100, si fourni → anneau de progression
-  color: string;             // hex couleur principale
-  colorBg: string;           // hex ou rgba fond
-  colorBorder: string;
-  icon: React.ReactNode;
-  trend?: { value: number; label: string };  // variation ex. +12 "vs hier"
-  href?: string;             // si fourni → bouton "Détails →"
-  onDetailClick?: () => void;
-  size?: "sm" | "md" | "lg";
-}
-
-// ─── Animated ring (canvas) ────────────────────────────────────────────────
-function RingProgress({ pct, color, size = 64 }: { pct: number; color: string; size?: number }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const raf = useRef<number>(0);
-
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width  = size * dpr;
-    canvas.height = size * dpr;
-    canvas.style.width  = `${size}px`;
-    canvas.style.height = `${size}px`;
-    const ctx = canvas.getContext("2d")!;
-    const cx = size / 2, cy = size / 2;
-    const r  = size * 0.38;
-    const sw = size * 0.09;
-    const target = Math.min(pct, 100) / 100;
-    let progress = 0;
-
-    function frame() {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.scale(dpr, dpr);
-      ctx.clearRect(0, 0, size, size);
-      // track
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, -Math.PI / 2, Math.PI * 1.5);
-      ctx.strokeStyle = "rgba(0,0,0,0.08)";
-      ctx.lineWidth = sw;
-      ctx.lineCap  = "round";
-      ctx.stroke();
-      // fill
-      if (progress > 0) {
-        const endA = -Math.PI / 2 + Math.PI * 2 * progress;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, -Math.PI / 2, endA);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = sw;
-        ctx.lineCap  = "round";
-        ctx.stroke();
-      }
-      // text
-      ctx.font         = `700 ${Math.round(size * 0.2)}px 'DM Sans', sans-serif`;
-      ctx.fillStyle    = color;
-      ctx.textAlign    = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(`${Math.round(progress * 100)}%`, cx, cy);
-
-      if (progress < target) {
-        progress = Math.min(target, progress + target / 45);
-        raf.current = requestAnimationFrame(frame);
-      }
+    if (diffHours < 1) {
+      return "À l'instant";
+    } else if (diffHours < 24) {
+      return `Il y a ${diffHours} heure${diffHours > 1 ? "s" : ""}`;
+    } else {
+      return date.toLocaleDateString("fr-FR", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
     }
-    cancelAnimationFrame(raf.current);
-    requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf.current);
-  }, [pct, color, size]);
-
-  return <canvas ref={ref} style={{ display: "block" }} />;
-}
-
-// ─── KpiCard ───────────────────────────────────────────────────────────────
-export function KpiCard({
-  label, value, total, unit, pct, color, colorBg, colorBorder,
-  icon, trend, onDetailClick,
-}: KpiCardProps) {
+  };
   return (
-    <div
-      className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border p-5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
-      style={{ background: colorBg, borderColor: colorBorder }}
-    >
-      {/* Subtle top-right glow */}
-      <div
-        className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full opacity-30 blur-2xl"
-        style={{ background: color }}
-      />
-
-      {/* Header */}
-      <div className="relative flex items-start justify-between">
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-xl shadow-sm"
-          style={{ background: color }}
-        >
-          <span className="text-white [&>svg]:h-5 [&>svg]:w-5">{icon}</span>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* Départs en cours (Feeders) */}
+      <div className="group relative overflow-hidden rounded-2xl border border-[#B5D4F4] bg-[#EBF3FC] p-5 transition-all hover:-translate-y-0.5 hover:shadow-md">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#185FA5]">
+          <Zap className="h-5 w-5 text-white" />
         </div>
-        {pct !== undefined && <RingProgress pct={pct} color={color} size={52} />}
-      </div>
-
-      {/* Values */}
-      <div className="relative mt-4">
-        <p className="text-[11px] font-semibold uppercase tracking-widest opacity-60">{label}</p>
-        <p className="mt-1 text-3xl font-bold leading-none" style={{ color }}>
-          {value}
-          {total !== undefined && (
-            <span className="ml-1 text-base font-medium opacity-40">/ {total}</span>
-          )}
-          {unit && <span className="ml-1 text-sm font-medium opacity-60">{unit}</span>}
+        <p className="mt-3.5 text-[10px] font-bold uppercase tracking-widest text-[#185FA5]">
+          Départs en cours
         </p>
-        {trend && (
-          <p className="mt-1.5 text-[11px] font-medium" style={{ color }}>
-            <span className="opacity-80">
-              {trend.value > 0 ? "+" : ""}{trend.value}
-            </span>{" "}
-            <span className="opacity-50">{trend.label}</span>
-          </p>
-        )}
+        <p className="mt-1 text-[30px] font-bold leading-none text-[#0C447C]">
+          {feedersCollectes}
+        </p>
+        <div className="mt-3 h-[3px] w-full overflow-hidden rounded-full bg-[#C8DFF5]">
+          <div
+            className="h-full rounded-full bg-[#185FA5] transition-all duration-700"
+            style={{ width: `${feedersTaux}%` }}
+          />
+        </div>
       </div>
 
-      {/* Detail link */}
-      {onDetailClick && (
-        <button
-          onClick={onDetailClick}
-          className="relative mt-4 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider transition-all group-hover:gap-2.5"
-          style={{ color }}
-        >
-          Détails
-          <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-        </button>
-      )}
+      <div className="group relative overflow-hidden rounded-2xl border border-[#9FE1CB] bg-[#EAF5F0] p-5 transition-all hover:-translate-y-0.5 hover:shadow-md">
+        <div className="flex items-start justify-between">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#1D9E75]">
+            <BarChart3 className="h-5 w-5 text-white" />
+          </div>
+          <span className="rounded-full bg-[#C0F0DC] px-2.5 py-0.5 text-[10px] font-bold text-[#0F6E56]">
+            {feedersTaux}%
+          </span>
+        </div>
+        <p className="mt-3.5 text-[10px] font-bold uppercase tracking-widest text-[#1D9E75]">
+          Dernière collecte
+        </p>
+        <p className="mt-1 text-[30px] font-bold leading-none text-[#085041]">
+          {feedersCollectes}
+          <span className="ml-1 text-sm font-medium opacity-40">
+            / {feedersAttendus}
+          </span>
+        </p>
+
+        {/* Affichage de la dernière soumission */}
+        <div className="mt-2 flex items-center gap-1.5 text-[10px] font-medium text-[#1D9E75]">
+          <Clock className="h-3 w-3" />
+          <span>{formatDerniereSoumission(derniereSoumission)}</span>
+        </div>
+
+        <div className="mt-2 h-[3px] w-full overflow-hidden rounded-full bg-[#C0EEDD]">
+          <div
+            className="h-full rounded-full bg-[#1D9E75] transition-all duration-700"
+            style={{ width: `${feedersTaux}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Départs collectés (Feeders collectés) */}
+      {/* <div className="group relative overflow-hidden rounded-2xl border border-[#9FE1CB] bg-[#EAF5F0] p-5 transition-all hover:-translate-y-0.5 hover:shadow-md">
+        <div className="flex items-start justify-between">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#1D9E75]">
+            <BarChart3 className="h-5 w-5 text-white" />
+          </div>
+          <span className="rounded-full bg-[#C0F0DC] px-2.5 py-0.5 text-[10px] font-bold text-[#0F6E56]">
+            {feedersTaux}%
+          </span>
+        </div>
+        <p className="mt-3.5 text-[10px] font-bold uppercase tracking-widest text-[#1D9E75]">
+          Départs collectés
+        </p>
+        <p className="mt-1 text-[30px] font-bold leading-none text-[#085041]">
+
+          {feedersCollectes}
+          <span className="ml-1 text-sm font-medium opacity-40">
+            {" "}
+            / {feedersAttendus}
+          </span>
+        </p>
+        <div className="mt-3 h-[3px] w-full overflow-hidden rounded-full bg-[#C0EEDD]">
+          <div
+            className="h-full rounded-full bg-[#1D9E75] transition-all duration-700"
+            style={{ width: `${feedersTaux}%` }}
+          />
+        </div>
+      </div> */}
+
+      {/* Équipes actifs */}
+      <div className="group relative overflow-hidden rounded-2xl border border-[#CECBF6] bg-[#F4EEFE] p-5 transition-all hover:-translate-y-0.5 hover:shadow-md">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#7F77DD]">
+          <Users className="h-5 w-5 text-white" />
+        </div>
+        <p className="mt-3.5 text-[10px] font-bold uppercase tracking-widest text-[#7F77DD]">
+          Équipes actives
+        </p>
+        <p className="mt-1 text-[30px] font-bold leading-none text-[#3C3489]">
+          {equipesActives}
+          <span className="ml-1 text-sm font-medium opacity-40">
+            {" "}
+            / {totalEquipes}
+          </span>
+        </p>
+        <p className="mt-2.5 text-[10px] font-medium text-[#534AB7]">
+          {totalEquipes} équipes au total
+        </p>
+      </div>
+
+      {/* Postes collectés */}
+      <div className="group relative cursor-pointer overflow-hidden rounded-2xl border border-[#FAC775] bg-[#FEF6E7] p-5 transition-all hover:-translate-y-0.5 hover:shadow-md">
+        <div className="flex items-start justify-between">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#BA7517]">
+            <Building2 className="h-5 w-5 text-white" />
+          </div>
+          <span className="rounded-full bg-[#FDE8B0] px-2.5 py-0.5 text-[10px] font-bold text-[#633806]">
+            {totalTaux}%
+          </span>
+        </div>
+        <p className="mt-3.5 text-[10px] font-bold uppercase tracking-widest text-[#BA7517]">
+          Postes collectés
+        </p>
+        <p className="mt-1 text-[30px] font-bold leading-none text-[#412402]">
+          {totalCollectes}
+          <span className="ml-1 text-sm font-medium opacity-40">
+            {" "}
+            / {totalAttendus}
+          </span>
+        </p>
+        <div className="mt-2.5 flex items-center gap-1 text-[11px] font-semibold text-[#BA7517] transition-all group-hover:gap-2">
+          Détails{" "}
+          <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+        </div>
+      </div>
     </div>
   );
 }
