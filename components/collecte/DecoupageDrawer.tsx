@@ -1,8 +1,7 @@
-import React from 'react'
+
 import { Drawer } from '../ui/drawer';
 import { Building2, Zap, LayoutGrid, Box, Power } from 'lucide-react';
 import { DecoupageStats } from '@/lib/types/collecte';
-import { open } from 'inspector/promises';
 import { pctCol } from './structure';
 
 export default function DecoupageDrawer({

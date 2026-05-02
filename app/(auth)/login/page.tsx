@@ -24,7 +24,10 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const getCurrentPosition = (): Promise<{ latitude: number; longitude: number }> => {
+  const getCurrentPosition = (): Promise<{
+    latitude: number;
+    longitude: number;
+  }> => {
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
         //console.warn("Géolocalisation non supportée par le navigateur");
@@ -48,9 +51,9 @@ export default function LoginPage() {
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,      // 10 secondes max
-          maximumAge: 0,       // Ne pas utiliser de cache
-        }
+          timeout: 10000, // 10 secondes max
+          maximumAge: 0, // Ne pas utiliser de cache
+        },
       );
     });
   };
@@ -85,59 +88,59 @@ export default function LoginPage() {
     <div className="h-screen flex overflow-hidden">
       {/* Left Panel - Fixed with dark overlay */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden fixed lg:relative lg:h-full">
-        
-        
         <img
           src="/images/login-cover.png"
           alt="image de fond"
           className="absolute w-full h-full object-cover"
         />
 
-         <div className="absolute inset-0 bg-black/30" />
-        
+        <div className="absolute inset-0 bg-black/30" />
+
         <div className="relative flex flex-col justify-between p-12 w-full z-10">
           <div>
-            <h1 className="mt-2 text-2xl text-center font-bold text-white">
-              PLATEFORME DE TRAITEMENT DES DONNEES DE COLLECTE DES ACTIFS DE DISTRIBUTION ELECTRIQUE ET COMMERCIAL
+            <h1 className="mt-2 uppercase text-3xl text-center font-bold text-white">
+              {/* PLATEFORME DE GESTION DES DONNÉES DE COLLECTE DES ACTIFS DE
+              DISTRIBUTION ÉLECTRIQUE ET COMMERCIAL */}
+              Système d’information électrique Transport Distribution et
+              commercial
             </h1>
           </div>
 
           <div className="space-y-2">
             <div className="grid gap-2 container mx-auto w-1/2">
-              <FeatureItem
-                title="Traitement Intelligent"
-              />
+              <FeatureItem />
             </div>
           </div>
         </div>
       </div>
 
       {/* Right Panel - Scrollable */}
-      <div className="flex-1 flex items-start justify-center p-4 bg-background overflow-y-auto h-full">
+      <div className="relative flex-1 flex items-start justify-center p-4 bg-white overflow-y-auto h-full">
         <div className="w-full max-w-md my-auto py-2">
-
-
+          <h1 className="lg:hidden uppercase text-center text-sm font-bold text-foreground mb-3 px-2 leading-snug">
+            Système d’information électrique Transport Distribution et
+            commercial
+          </h1>{" "}
           {/* Mobile Logo */}
-<div className="flex items-center justify-center w-full mx-auto mb-2 sm:mb-4 md:mb-6">
-  <div className="flex flex-wrap gap-2 sm:gap-4 items-center justify-center">
-    <img
-      src="/logos/eneo.jpg"
-      alt="eneo"
-      className="w-20 sm:w-28  h-12 sm:h-16 object-contain"
-    />
-    <img
-      src="/logos/minee.png"
-      alt="minee"
-      className="w-20 sm:w-28  h-20 sm:h-28  object-contain"
-    />
-    <img
-      src="/logos/arsel.png"
-      alt="arsel"
-      className="w-20 sm:w-28  h-12 sm:h-16  object-contain"
-    />
-  </div>
-</div>
-
+          <div className="flex items-center justify-center w-full mx-auto mb-2 sm:mb-4 md:mb-6">
+            <div className="flex flex-wrap gap-2 sm:gap-4 items-center justify-center">
+              <img
+                src="/logos/eneo.jpg"
+                alt="eneo"
+                className="w-20 sm:w-28  h-12 sm:h-16 object-contain"
+              />
+              <img
+                src="/logos/minee.png"
+                alt="minee"
+                className="w-20 sm:w-28  h-20 sm:h-28  object-contain"
+              />
+              <img
+                src="/logos/arsel.png"
+                alt="arsel"
+                className="w-20 sm:w-28  h-12 sm:h-16  object-contain"
+              />
+            </div>
+          </div>
           <Card className="border-border/50 shadow-lg">
             <CardHeader className="space-y-1 ">
               <CardTitle className="text-2xl font-semibold tracking-tight">
@@ -213,7 +216,9 @@ export default function LoginPage() {
                   <Checkbox
                     id="remember"
                     checked={rememberMe}
-                    onCheckedChange={(checked) => setRememberMe(checked === true)}
+                    onCheckedChange={(checked) =>
+                      setRememberMe(checked === true)
+                    }
                     disabled={isLoading}
                   />
                   <Label
@@ -241,28 +246,40 @@ export default function LoginPage() {
               </form>
             </CardContent>
           </Card>
+          <div className="absolute right-0 bottom-10 left-0">
+            <div className="flex items-center justify-center gap-2">
+              <p className="text-xs text-muted-foreground">Développé par</p>
+              <img
+                src="/logos/kesenergy.png"
+                alt="KES EC Logo"
+                className="h-8 w-auto object-contain"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function FeatureItem({ title }: { title: string }) {
+function FeatureItem() {
   const subPoints = [
-    "Gestion des doublons",
-    "Gestion des divergences",
-    "Gestion des cas complexes",
-    "Gestion des nouveaux actifs"
+    
+    "Traitement des données",
+    "Statistiques sur les actifs",
+    "SIG des réseau de distribution et client BT",
+    "Schémas électriques d'exploitation",
   ];
 
   return (
     <div className="flex items-start gap-2 p-2 mx-7 rounded-lg bg-sidebar-accent/30 border border-sidebar-border/50 backdrop-blur-sm">
-      <div className="w-2 h-2 rounded-full bg-sidebar-primary mt-2" />
       <div>
-        <p className="font-medium text-white">{title}</p>
         <ul className="mt-1 space-y-1">
           {subPoints.map((point, index) => (
-            <li key={index} className="text-sm text-white/90 flex items-start gap-1.5">
+            <li
+              key={index}
+              className="text-sm text-white/90 flex items-start gap-1.5"
+            >
               <span className="text-sidebar-primary">•</span>
               {point}
             </li>

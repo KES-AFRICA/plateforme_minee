@@ -11,14 +11,13 @@ import {
   BarChart3,
 } from "lucide-react";
 import { useRef, useEffect } from "react";
-import { ErreursStats, PctColors } from "./interface";
-import { DecoupageStats } from "@/lib/types/collecte";
+import { DecoupageStats, ErreursStats, PctColors } from "@/lib/types/collecte";
 
 export function pctCol(p: number): PctColors {
   if (p >= 76) return { fill: "#1D9E75", light: "#EAF5F0", text: "#085041" };
-  if (p >= 51) return { fill: "#639922", light: "#EAF3DE", text: "#27500A" };
-  if (p >= 26) return { fill: "#BA7517", light: "#FEF6E7", text: "#412402" };
-  return { fill: "#A32D2D", light: "#FCEBEB", text: "#501313" };
+  if (p >= 51) return { fill: "#60A908", light: "#EAF3DE", text: "#27500A" };
+  if (p >= 26) return { fill: "#D88106", light: "#FEF6E7", text: "#412402" };
+  return { fill: "#B50A0A", light: "#F0C0C0", text: "#501313" };
 }
 
 export function EquipIcon({
@@ -126,7 +125,140 @@ export function DonutChart({
 }
 
 // ─── Speedometer gauge (canvas) ─────────────────────────────────────────────
-export function SpeedGauge({ pct, color }: { pct: number; color: string }) {
+// export function SpeedGauge({
+//   pct,
+//   color,
+//   width = 160,
+//   height = 98,
+// }: {
+//   pct: number;
+//   color: string;
+//   width?: number;
+//   height?: number;
+// }) {
+//   const ref = useRef<HTMLCanvasElement>(null);
+//   const raf = useRef<number>(0);
+
+//   useEffect(() => {
+//     const cv = ref.current;
+//     if (!cv) return;
+//     const dpr = window.devicePixelRatio || 1;
+//     const W = width,
+//       H = height;
+//     cv.width = W * dpr;
+//     cv.height = H * dpr;
+//     cv.style.width = `${W}px`;
+//     cv.style.height = `${H}px`;
+//     const ctx = cv.getContext("2d")!;
+//     ctx.scale(dpr, dpr);
+//     const cx = W / 2;
+//       r = W * 0.34,
+//       sw = W * 0.07;
+//     const cy = H - sw - 4;
+//     const sA = Math.PI,
+//       eA = Math.PI * 2;
+//     const target = Math.min(pct, 100) / 100;
+//     let p = 0;
+
+//     const bgSegs = [
+//       { f: 0, t: 0.25, c: "#FCEBEB" },
+//       { f: 0.25, t: 0.5, c: "#FEF6E7" },
+//       { f: 0.5, t: 0.75, c: "#EAF3DE" },
+//       { f: 0.75, t: 1, c: "#EAF5F0" },
+//     ];
+//     const fillSegs = [
+//       { f: 0, t: 0.25, c: "#E24B4A" },
+//       { f: 0.25, t: 0.5, c: "#EF9F27" },
+//       { f: 0.5, t: 0.75, c: "#639922" },
+//       { f: 0.75, t: 1, c: "#1D9E75" },
+//     ];
+
+//     function frame() {
+//       ctx.setTransform(1, 0, 0, 1, 0, 0);
+//       ctx.scale(dpr, dpr);
+//       ctx.clearRect(0, 0, W, H);
+//       bgSegs.forEach((s) => {
+//         ctx.beginPath();
+//         ctx.arc(cx, cy, r, sA + (eA - sA) * s.f, sA + (eA - sA) * s.t);
+//         ctx.strokeStyle = s.c;
+//         ctx.lineWidth = sw;
+//         ctx.lineCap = "butt";
+//         ctx.stroke();
+//       });
+//       if (p > 0) {
+//         fillSegs
+//           .filter((s) => s.f < p)
+//           .forEach((s) => {
+//             const t = Math.min(s.t, p);
+//             ctx.beginPath();
+//             ctx.arc(cx, cy, r, sA + (eA - sA) * s.f, sA + (eA - sA) * t);
+//             ctx.strokeStyle = s.c;
+//             ctx.lineWidth = sw;
+//             ctx.lineCap = t === p ? "round" : "butt";
+//             ctx.stroke();
+//           });
+//       }
+//       for (let i = 0; i <= 10; i++) {
+//         const a = sA + (eA - sA) * (i / 10),
+//           isMaj = i % 5 === 0;
+//         const r1 = r - sw / 2 - 2,
+//           r2 = r + sw / 2 + (isMaj ? 5 : 2);
+//         ctx.beginPath();
+//         ctx.moveTo(cx + r1 * Math.cos(a), cy + r1 * Math.sin(a));
+//         ctx.lineTo(cx + r2 * Math.cos(a), cy + r2 * Math.sin(a));
+//         ctx.strokeStyle = isMaj ? "rgba(0,0,0,.18)" : "rgba(0,0,0,.07)";
+//         ctx.lineWidth = isMaj ? 1.5 : 0.7;
+//         ctx.lineCap = "square";
+//         ctx.stroke();
+//       }
+//       const nA = sA + (eA - sA) * p,
+//         nLen = r - sw / 2 - 5;
+//       ctx.save();
+//       ctx.beginPath();
+//       ctx.moveTo(cx, cy);
+//       ctx.lineTo(cx + nLen * Math.cos(nA), cy + nLen * Math.sin(nA));
+//       ctx.strokeStyle = "#374151";
+//       ctx.lineWidth = 2;
+//       ctx.lineCap = "round";
+//       ctx.stroke();
+//       ctx.beginPath();
+//       ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+//       ctx.fillStyle = color;
+//       ctx.fill();
+//       ctx.beginPath();
+//       ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+//       ctx.fillStyle = "#fff";
+//       ctx.fill();
+//       ctx.restore();
+//       ctx.font = `700 ${Math.round(W * 0.12)}px 'DM Sans',sans-serif`;
+//       ctx.fillStyle = color;
+//       ctx.textAlign = "center";
+//       ctx.textBaseline = "middle";
+//       ctx.fillText(`${Math.round(p * 100)}%`, cx, cy - r * 0.33);
+//       if (p < target) {
+//         p = Math.min(target, p + target / 45);
+//         raf.current = requestAnimationFrame(frame);
+//       }
+//     }
+//     cancelAnimationFrame(raf.current);
+//     requestAnimationFrame(frame);
+//     return () => cancelAnimationFrame(raf.current);
+//   }, [pct, color]);
+
+//   return <canvas ref={ref} style={{ display: "block" }} />;
+// }
+
+export function SpeedGauge({
+  pct,
+  color,
+  width = 160,
+  height = 98,
+}: {
+  pct: number;
+  color: string;
+  width?: number;
+  height?: number;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   const raf = useRef<number>(0);
 
@@ -134,18 +266,20 @@ export function SpeedGauge({ pct, color }: { pct: number; color: string }) {
     const cv = ref.current;
     if (!cv) return;
     const dpr = window.devicePixelRatio || 1;
-    const W = 160,
-      H = 98;
+    const W = width;
+    // H = height;
+    const r = W * 0.34;
+    const sw = W * 0.07;
+    const H = Math.round(r + sw * 1.5 + sw + 8);
+    const cy = H - sw - 4;
     cv.width = W * dpr;
     cv.height = H * dpr;
     cv.style.width = `${W}px`;
     cv.style.height = `${H}px`;
     const ctx = cv.getContext("2d")!;
     ctx.scale(dpr, dpr);
-    const cx = W / 2,
-      cy = H * 0.9,
-      r = W * 0.34,
-      sw = W * 0.07;
+    const cx = W / 2;
+
     const sA = Math.PI,
       eA = Math.PI * 2;
     const target = Math.min(pct, 100) / 100;
@@ -234,9 +368,20 @@ export function SpeedGauge({ pct, color }: { pct: number; color: string }) {
     cancelAnimationFrame(raf.current);
     requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf.current);
-  }, [pct, color]);
+  }, [pct, color, width, height]);
 
-  return <canvas ref={ref} style={{ display: "block" }} />;
+  return (
+    <canvas
+      ref={ref}
+      style={{
+        display: "block",
+        width: "100%",
+        height: "100%",
+        maxWidth: `${width}px`,
+        margin: "0 auto",
+      }}
+    />
+  );
 }
 
 // ─── Line chart (canvas) ─────────────────────────────────────────────────────
@@ -340,7 +485,7 @@ export function LineChart({
   return (
     <canvas
       ref={ref}
-      style={{ width: "100%", height: "220px", display: "block" }}
+      style={{ display: "block", width: "100%", height: "auto" }}
     />
   );
 }
