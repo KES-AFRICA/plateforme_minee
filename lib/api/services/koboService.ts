@@ -206,3 +206,12 @@ export async function fetchPointRemarquableDetail(
     `/map/wires/${encodeURIComponent(wireId)}/troncon/${encodeURIComponent(tronconIndex)}/point-remarquable/${encodeURIComponent(pointIndex)}`
   );
 }
+
+/**
+ * GET /map/wires/{wireId}/troncon/{tronconIndex}/point-remarquable/{pointIndex}
+ * Retourne le détail complet d'un point remarquable souterrain avec ses photos.
+ *
+ * @param wireId        ID Kobo du wire
+ * @param tronconIndex  Index du tronçon (commence à 1)
+ * @param pointIndex    Index du point remarquable dans le tronçon (commence à 1)
+ */

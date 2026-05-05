@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { CollecteStatsResponse } from "@/lib/types/collecte";
 import { fetchCollecteStats } from "@/lib/api/services/koboService";
-import { CollecteStatsResponse } from "@/lib/types/collecte";
 
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 heures
