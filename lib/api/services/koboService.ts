@@ -1,6 +1,7 @@
 // ─── services/koboService.ts ──────────────────────────────────────────────────
 
-import { ApiError, PosteDetail, PostesMapResponse, REASDetail, SupportDetail, WireDetail, WiresMapResponse } from "@/lib/types/kobo";
+import { CollecteStatsResponse } from "@/lib/types/collecte";
+import { ApiError, PointRemarquableDetail, PosteDetail, PostesMapResponse, REASDetail, SupportDetail, WireDetail, WiresMapResponse } from "@/lib/types/kobo";
 
 
 
@@ -178,4 +179,30 @@ export function buildPhotoUrl(photoPath: string | null | undefined): string | nu
   }
 
   return photoPath;
+}
+
+export async function fetchCollecteStats(): Promise<CollecteStatsResponse> {
+  return apiFetch<CollecteStatsResponse>("/dashboard/collecte");
+}
+
+/**
+ * GET /map/wires/{wireId}/troncon/{tronconIndex}/point-remarquable/{pointIndex}
+ * Retourne le détail complet d'un point remarquable souterrain avec ses photos.
+ *
+ * @param wireId        ID Kobo du wire
+ * @param tronconIndex  Index du tronçon (commence à 1)
+ * @param pointIndex    Index du point remarquable dans le tronçon (commence à 1)
+ */
+export async function fetchPointRemarquableDetail(
+  wireId: number,
+  tronconIndex: number,
+  pointIndex: number
+): Promise<PointRemarquableDetail> {
+  if (!wireId) throw new Error("wireId ne peut pas être vide.");
+  if (tronconIndex < 1) throw new Error("tronconIndex doit être >= 1.");
+  if (pointIndex < 1) throw new Error("pointIndex doit être >= 1.");
+
+  return apiFetch<PointRemarquableDetail>(
+    `/map/wires/${encodeURIComponent(wireId)}/troncon/${encodeURIComponent(tronconIndex)}/point-remarquable/${encodeURIComponent(pointIndex)}`
+  );
 }

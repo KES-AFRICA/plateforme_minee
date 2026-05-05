@@ -21,6 +21,8 @@ export interface WaypointClickData {
   wire_id:       number;
   troncon_index: number;
   support_index?: number;
+  point_index?: number;
+
 }
 
 // ─── Hook support ─────────────────────────────────────────────────────────────

@@ -716,3 +716,69 @@ export interface REASDetail {
     submitted_by:    string | null;
   };
 }
+
+// ── Point remarquable souterrain ──────────────────────────────────────────────
+
+export interface PointRemarquablePosition {
+  latitude: number | null;
+  longitude: number | null;
+  altitude: number | null;
+  precision: number | null;
+}
+
+export interface PointRemarquableAttachment {
+  uid: string;
+  mimetype: string;
+  filename: string;
+  basename: string;
+  question_xpath: string;
+}
+
+export interface PointRemarquablePhotos {
+  original: string | null;
+  large: string | null;
+  medium: string | null;
+  small: string | null;
+}
+
+export interface PointRemarquableCable {
+  nature: string | null;
+  section: string | null;
+  isolant: string | null;
+  pose: string | null;
+  profondeur: string | null;
+}
+
+export interface PointRemarquableDetail {
+  wire_id: number;
+  troncon_index: number;
+  point_index: number;
+  points_total: number;
+  type: "point_remarquable";
+  wire: {
+    feeder_id: string | null;
+    feeder_name: string | null;
+    tension_kv: string | null;
+    phase: string | null;
+  };
+  troncon: {
+    index: number;
+    type: "souterrain";
+    cable: PointRemarquableCable;
+  };
+  point_remarquable: {
+    type: string | null;
+    id_point: string | null;
+    etat: string | null;
+    position_raw: string | null;
+    position: PointRemarquablePosition | null;
+  };
+  photos: PointRemarquablePhotos;
+  attachment: PointRemarquableAttachment | null;
+  meta: {
+    kobo_id: number;
+    submission_time: string;
+    submitted_by: string;
+    xpath_photo: string;
+  };
+}

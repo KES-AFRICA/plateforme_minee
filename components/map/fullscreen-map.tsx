@@ -53,25 +53,161 @@ function segmentStyle(type: string, color: string) {
   return                            { color, weight: 5, opacity: 0.95, dashArray: null   };
 }
 
+// ── Résolution des coordonnées nulles via les autres wires ────────────────────
+
+/**
+ * Pour un wire dont debut_coords est null (ex: dérivation en début),
+ * cherche dans tous les autres wires celui qui a ce code comme FIN
+ * et récupère ses fin_coords, ou comme DÉBUT et récupère ses debut_coords.
+ */
+function resolveNullDebutCoords(
+  wire: any,
+  allWires: any[]
+): [number, number] | null {
+  const debutCode = wire.debut?.code;
+  if (!debutCode) return null;
+
+  for (const other of allWires) {
+    if (other.id === wire.id) continue;
+    // Notre début = fin d'un autre wire
+    if (
+      other.fin?.code === debutCode &&
+      other.fin?.latitude != null &&
+      other.fin?.longitude != null
+    ) {
+      return [other.fin.latitude, other.fin.longitude];
+    }
+    // Notre début = début d'un autre wire (même nœud)
+    if (
+      other.debut?.code === debutCode &&
+      other.debut?.latitude != null &&
+      other.debut?.longitude != null
+    ) {
+      return [other.debut.latitude, other.debut.longitude];
+    }
+  }
+  return null;
+}
+
+function resolveNullFinCoords(
+  wire: any,
+  allWires: any[]
+): [number, number] | null {
+  const finCode = wire.fin?.code;
+  if (!finCode) return null;
+
+  for (const other of allWires) {
+    if (other.id === wire.id) continue;
+    // Notre fin = début d'un autre wire
+    if (
+      other.debut?.code === finCode &&
+      other.debut?.latitude != null &&
+      other.debut?.longitude != null
+    ) {
+      return [other.debut.latitude, other.debut.longitude];
+    }
+    // Notre fin = fin d'un autre wire (même nœud)
+    if (
+      other.fin?.code === finCode &&
+      other.fin?.latitude != null &&
+      other.fin?.longitude != null
+    ) {
+      return [other.fin.latitude, other.fin.longitude];
+    }
+  }
+  return null;
+}
+
+// ── Icônes waypoints ──────────────────────────────────────────────────────────
+
 function makeWaypointIcon(L: any, wpType: string, hasDetail: boolean): any {
-  const colors: Record<string, string> = {
-    support:  "#22c55e",
-    remontee: "#f59e0b",
-    balise:   "#22c55e",
-    marquage: "#22c55e",
-    aucune:   "#6b7280",
+  const configs: Record<string, { color: string; label: string; shape: "square" | "diamond" | "circle" | "pentagon" }> = {
+    // Supports aériens
+    support:  { color: "#22c55e", label: "S", shape: "square"   },
+    // Remontées REAS
+    remontee: { color: "#f59e0b", label: "R", shape: "square"   },
+    // Points remarquables souterrains (toutes variantes)
+    "Borne ou balise de signalisation": { color: "#06b6d4", label: "P", shape: "diamond" },
+    "Marquage au sol":                  { color: "#06b6d4", label: "P", shape: "diamond" },
+    "Borne":                            { color: "#06b6d4", label: "P", shape: "diamond" },
+    "Balise":                           { color: "#06b6d4", label: "P", shape: "diamond" },
+    balise:                             { color: "#06b6d4", label: "P", shape: "diamond" },
+    marquage:                           { color: "#06b6d4", label: "P", shape: "diamond" },
+    point_remarquable:                  { color: "#06b6d4", label: "P", shape: "diamond" },
+    // OCR
+    ocr:        { color: "#8b5cf6", label: "O", shape: "circle"  },
+    OCR:        { color: "#8b5cf6", label: "O", shape: "circle"  },
+    "OCR_fin":  { color: "#8b5cf6", label: "O", shape: "circle"  },
+    // Dérivations
+    derivation: { color: "#f97316", label: "D", shape: "pentagon" },
+    Derivation: { color: "#f97316", label: "D", shape: "pentagon" },
+    "derivation_fin": { color: "#f97316", label: "D", shape: "pentagon" },
+    // Inconnu
+    aucune:     { color: "#6b7280", label: "?", shape: "square"  },
   };
-  const color  = colors[wpType] ?? "#22c55e";
-  const label  = wpType === "remontee" ? "R" : wpType === "balise" ? "B" : wpType === "marquage" ? "M" : "S";
+
+  // Fallback par correspondance partielle
+  let cfg = configs[wpType];
+  if (!cfg) {
+    const lc = wpType.toLowerCase();
+    if (lc.includes("borne") || lc.includes("balise") || lc.includes("signali") || lc.includes("remarq"))
+      cfg = { color: "#06b6d4", label: "P", shape: "diamond" };
+    else if (lc.includes("marqu"))
+      cfg = { color: "#06b6d4", label: "P", shape: "diamond" };
+    else if (lc.includes("ocr"))
+      cfg = { color: "#8b5cf6", label: "O", shape: "circle" };
+    else if (lc.includes("deriv"))
+      cfg = { color: "#f97316", label: "D", shape: "pentagon" };
+    else if (lc.includes("remont"))
+      cfg = { color: "#f59e0b", label: "R", shape: "square" };
+    else
+      cfg = { color: "#6b7280", label: "?", shape: "square" };
+  }
+
+  const { color, label, shape } = cfg;
   const cursor = hasDetail ? "cursor:pointer;" : "";
   const ring   = hasDetail ? `stroke="#fff" stroke-width="2"` : `stroke="#fff" stroke-width="1.5"`;
   const size   = hasDetail ? 18 : 14;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="${cursor}">
-    <rect x="1.5" y="1.5" width="${size - 3}" height="${size - 3}" rx="2.5" fill="${color}" ${ring}/>
-    <text x="${size / 2}" y="${size / 2 + 3.5}" text-anchor="middle" font-size="${hasDetail ? 8 : 7}" font-weight="700" fill="white" font-family="sans-serif">${label}</text>
+  const h      = size / 2;
+
+  let shapeEl = "";
+  if (shape === "diamond") {
+    // Losange pour les points remarquables
+    shapeEl = `<polygon points="${h},2 ${size - 2},${h} ${h},${size - 2} 2,${h}" fill="${color}" ${ring}/>`;
+  } else if (shape === "circle") {
+    // Cercle pour OCR
+    shapeEl = `<circle cx="${h}" cy="${h}" r="${h - 2}" fill="${color}" ${ring}/>`;
+  } else if (shape === "pentagon") {
+    // Pentagone pour Dérivation
+    const r = h - 2;
+    const pts = Array.from({ length: 5 }, (_, i) => {
+      const a = (i * 2 * Math.PI) / 5 - Math.PI / 2;
+      return `${(h + r * Math.cos(a)).toFixed(1)},${(h + r * Math.sin(a)).toFixed(1)}`;
+    }).join(" ");
+    shapeEl = `<polygon points="${pts}" fill="${color}" ${ring}/>`;
+  } else {
+    // Carré arrondi pour support / REAS / autres
+    shapeEl = `<rect x="1.5" y="1.5" width="${size - 3}" height="${size - 3}" rx="2.5" fill="${color}" ${ring}/>`;
+  }
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"
+    viewBox="0 0 ${size} ${size}" style="${cursor}">
+    ${shapeEl}
+    <text x="${h}" y="${h + 3.5}" text-anchor="middle"
+      font-size="${hasDetail ? 8 : 7}" font-weight="700"
+      fill="white" font-family="sans-serif">${label}</text>
   </svg>`;
-  return L.divIcon({ html: svg, className: "", iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -(size / 2 + 4)] });
+
+  return L.divIcon({
+    html: svg,
+    className:   "",
+    iconSize:    [size, size],
+    iconAnchor:  [h, h],
+    popupAnchor: [0, -(h + 4)],
+  });
 }
+
+// ── Helpers génériques ────────────────────────────────────────────────────────
 
 function getCoords(eq: EquipmentRecord): [number, number] | null {
   const lat = parseFloat(String(eq.latitude ?? eq.lattitude ?? ""));
@@ -128,26 +264,41 @@ function makeWirePopupHtml(wire: any): string {
     <div style="display:flex;flex-direction:column;gap:4px;font-size:11px;">
       <div><strong>Type:</strong> ${typeLabel}</div>
       <div><strong>Tronçons:</strong> ${wire.segments?.length ?? 1}</div>
-      <div><strong>Début:</strong> ${wire.debut_type || "N/A"}</div>
-      <div><strong>Fin:</strong> ${wire.fin_type || "N/A"}</div>
+      <div><strong>Début:</strong> ${wire.debut?.type || "N/A"}</div>
+      <div><strong>Fin:</strong> ${wire.fin?.type || "N/A"}</div>
     </div>
   </div>`;
 }
 
 function makeWaypointPopupHtml(wp: WireWaypoint): string {
   const labels: Record<string, string> = {
-    support:  "Support aérien",
-    remontee: "Remontée REAS",
-    balise:   "Balise souterraine",
-    marquage: "Marquage souterrain",
-    aucune:   "Point souterrain",
+    support:   "Support aérien",
+    remontee:  "Remontée REAS",
+    balise:    "Balise souterraine",
+    marquage:  "Marquage souterrain",
+    aucune:    "Point souterrain",
+    ocr:       "OCR",
+    OCR:       "OCR",
+    derivation:"Dérivation",
+    Derivation:"Dérivation",
   };
+  const lc = wp.type.toLowerCase();
+  let typeLabel = labels[wp.type] ?? wp.type;
+  if (!labels[wp.type]) {
+    if (lc.includes("borne") || lc.includes("balise") || lc.includes("signali") || lc.includes("remarq"))
+      typeLabel = "Point remarquable";
+    else if (lc.includes("marqu")) typeLabel = "Marquage souterrain";
+    else if (lc.includes("ocr"))   typeLabel = "OCR";
+    else if (lc.includes("deriv")) typeLabel = "Dérivation";
+  }
   return `<div style="font-family:sans-serif;font-size:11px;min-width:160px">
-    <div style="font-weight:700;color:#22c55e;margin-bottom:4px">${labels[wp.type] ?? wp.type}</div>
+    <div style="font-weight:700;color:#22c55e;margin-bottom:4px">${typeLabel}</div>
     <div>📍 ${wp.lat.toFixed(6)}, ${wp.lng.toFixed(6)}</div>
     ${wp.troncon_index !== undefined ? `<div style="color:#888;font-size:10px;margin-top:2px">Tronçon ${(wp.troncon_index ?? 0) + 1}</div>` : ""}
   </div>`;
 }
+
+// ── Composant principal ───────────────────────────────────────────────────────
 
 export default function FullscreenMap({
   equipments = [], wires = [],
@@ -240,12 +391,56 @@ export default function FullscreenMap({
         layerGroup.current.clearLayers();
         const allCoords: [number, number][] = [];
 
-        // ── 1. WIRES d'abord (en bas) ─────────────────────────────────────────
+        // ── 1. WIRES (en bas) ─────────────────────────────────────────────────
         for (const wire of wires) {
-          const segments: WireSegment[] = (wire.segments && wire.segments.length > 0)
-            ? wire.segments
-            : [{ type: wire.type === "souterrain" ? "souterrain" : "aerien", coordinates: wire.coordinates, waypoints: wire.waypoints ?? [] }];
 
+          // ── Résolution coords nulles via les autres wires ──────────────────
+          let debutLat: number | null = wire.debut?.latitude  ?? null;
+          let debutLng: number | null = wire.debut?.longitude ?? null;
+          let finLat:   number | null = wire.fin?.latitude    ?? null;
+          let finLng:   number | null = wire.fin?.longitude   ?? null;
+
+          if (debutLat == null || debutLng == null) {
+            const resolved = resolveNullDebutCoords(wire, wires);
+            if (resolved) { [debutLat, debutLng] = resolved; }
+          }
+          if (finLat == null || finLng == null) {
+            const resolved = resolveNullFinCoords(wire, wires);
+            if (resolved) { [finLat, finLng] = resolved; }
+          }
+
+          // ── Construction des segments avec coords résolues ─────────────────
+          const segments: WireSegment[] =
+            wire.segments && wire.segments.length > 0
+              ? wire.segments.map((seg: WireSegment, i: number) => {
+                  const coords = [...(seg.coordinates ?? [])];
+                  // Premier segment : injecter le début si manquant
+                  if (i === 0 && debutLat != null && debutLng != null) {
+                    const first = coords[0];
+                    if (!first || isNaN(first[0]) || isNaN(first[1])) {
+                      coords.unshift([debutLng, debutLat]);
+                    }
+                  }
+                  // Dernier segment : injecter la fin si manquante
+                  if (i === wire.segments.length - 1 && finLat != null && finLng != null) {
+                    const last = coords[coords.length - 1];
+                    if (!last || isNaN(last[0]) || isNaN(last[1])) {
+                      coords.push([finLng, finLat]);
+                    }
+                  }
+                  return { ...seg, coordinates: coords };
+                })
+              : [{
+                  type: (wire.type === "souterrain" ? "souterrain" : "aerien") as WireSegment["type"],
+                  coordinates: [
+                    ...(debutLat != null && debutLng != null ? [[debutLng, debutLat] as [number, number]] : []),
+                    ...(wire.coordinates ?? []),
+                    ...(finLat != null && finLng != null ? [[finLng, finLat] as [number, number]] : []),
+                  ],
+                  waypoints: wire.waypoints ?? [],
+                }];
+
+          // ── Tracé des segments ─────────────────────────────────────────────
           for (const seg of segments) {
             if (!seg.coordinates || seg.coordinates.length < 2) continue;
             const leafletCoords = seg.coordinates.map(([lng, lat]) => [lat, lng] as [number, number]);
@@ -258,14 +453,14 @@ export default function FullscreenMap({
             polyline.addTo(layerGroup.current);
             for (const [lng, lat] of seg.coordinates) allCoords.push([lat, lng]);
 
-            // ── Waypoints du segment ───────────────────────────────────────
+            // ── Waypoints du segment ─────────────────────────────────────────
             for (const wp of seg.waypoints ?? []) {
               if (wp.type === "aucune") continue;
-              const isClickable = (wp.type === "support" || wp.type === "remontee") && !!wire.id;
+              const isClickable =
+                (wp.type === "support" || wp.type === "remontee") && !!wire.id;
               const icon   = makeWaypointIcon(L, wp.type, isClickable);
               const marker = L.marker([wp.lat, wp.lng], { icon, zIndexOffset: -100 });
 
-              // Popup toujours bindé — s'ouvre au clic comme pour un poste
               marker.bindPopup(makeWaypointPopupHtml(wp), { maxWidth: 220 });
 
               if (isClickable) {
@@ -276,13 +471,20 @@ export default function FullscreenMap({
 
                 marker.on("click", (e: any) => {
                   e.originalEvent?.stopPropagation?.();
-                  // 1. Ouvre le popup (comme pour un poste)
                   marker.openPopup();
-                  // 2. Ouvre le sheet en parallèle
                   if (_type === "support") {
-                    onWaypointClickRef.current?.({ type: "support", wire_id: _wire_id, troncon_index: _troncon_index, support_index: _support_index });
+                    onWaypointClickRef.current?.({
+                      type: "support",
+                      wire_id: _wire_id,
+                      troncon_index: _troncon_index,
+                      support_index: _support_index,
+                    });
                   } else {
-                    onWaypointClickRef.current?.({ type: "remontee", wire_id: _wire_id, troncon_index: _troncon_index });
+                    onWaypointClickRef.current?.({
+                      type: "remontee",
+                      wire_id: _wire_id,
+                      troncon_index: _troncon_index,
+                    });
                   }
                 });
               }
@@ -291,11 +493,12 @@ export default function FullscreenMap({
             }
           }
 
-          // ── Waypoints de niveau wire (fallback ancienne structure) ─────────
+          // ── Waypoints de niveau wire (fallback ancienne structure) ──────────
           if (!wire.segments || wire.segments.length === 0) {
             for (const wp of wire.waypoints ?? []) {
               if (wp.type === "aucune") continue;
-              const isClickable = (wp.type === "support" || wp.type === "remontee") && !!wire.id;
+              const isClickable =
+                (wp.type === "support" || wp.type === "remontee") && !!wire.id;
               const icon   = makeWaypointIcon(L, wp.type, isClickable);
               const marker = L.marker([wp.lat, wp.lng], { icon, zIndexOffset: -100 });
 
@@ -311,9 +514,18 @@ export default function FullscreenMap({
                   e.originalEvent?.stopPropagation?.();
                   marker.openPopup();
                   if (_type === "support") {
-                    onWaypointClickRef.current?.({ type: "support", wire_id: _wire_id, troncon_index: _troncon_index, support_index: _support_index });
+                    onWaypointClickRef.current?.({
+                      type: "support",
+                      wire_id: _wire_id,
+                      troncon_index: _troncon_index,
+                      support_index: _support_index,
+                    });
                   } else {
-                    onWaypointClickRef.current?.({ type: "remontee", wire_id: _wire_id, troncon_index: _troncon_index });
+                    onWaypointClickRef.current?.({
+                      type: "remontee",
+                      wire_id: _wire_id,
+                      troncon_index: _troncon_index,
+                    });
                   }
                 });
               }
@@ -323,7 +535,7 @@ export default function FullscreenMap({
           }
         }
 
-        // ── 2. ÉQUIPEMENTS ensuite (au-dessus) ────────────────────────────────
+        // ── 2. ÉQUIPEMENTS (au-dessus des wires) ──────────────────────────────
         for (const eq of (Array.isArray(equipments) ? equipments : []) as EquipmentRecord[]) {
           const c = getCoords(eq);
           if (!c) continue;
@@ -351,16 +563,22 @@ export default function FullscreenMap({
       <div ref={mapRef} className="w-full h-full z-0" />
 
       {/* Plein écran */}
-      <button onClick={toggleFullscreen} className="absolute top-3 right-3 z-10 bg-white rounded-lg shadow-md p-2 hover:bg-gray-50">
+      <button
+        onClick={toggleFullscreen}
+        className="absolute top-3 right-3 z-10 bg-white rounded-lg shadow-md p-2 hover:bg-gray-50"
+      >
         {isFullscreen
           ? <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>
           : <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
         }
       </button>
 
-      {/* Sélecteur de fond */}
+      {/* Sélecteur de fond de carte */}
       <div className="absolute bottom-3 right-3 z-10">
-        <button onClick={() => setIsLayerOpen(p => !p)} className="bg-white rounded-lg shadow-md px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 hover:bg-gray-50">
+        <button
+          onClick={() => setIsLayerOpen(p => !p)}
+          className="bg-white rounded-lg shadow-md px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 hover:bg-gray-50"
+        >
           <Satellite className="h-3.5 w-3.5" />
           {currentLayer === "street" ? "Carte" : "Satellite"}
           {isLayerOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
@@ -368,8 +586,13 @@ export default function FullscreenMap({
         {isLayerOpen && (
           <div className="absolute bottom-full right-0 mb-1 bg-white rounded-lg shadow-lg overflow-hidden min-w-32.5">
             {(["street", "satellite"] as LayerType[]).map((l) => (
-              <button key={l} onClick={() => handleLayerChange(l)}
-                className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-gray-50 ${currentLayer === l ? "text-blue-600 font-medium" : "text-black"}`}>
+              <button
+                key={l}
+                onClick={() => handleLayerChange(l)}
+                className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-gray-50 ${
+                  currentLayer === l ? "text-blue-600 font-medium" : "text-black"
+                }`}
+              >
                 {l === "street" ? "Carte (OSM)" : "Satellite"}
                 {currentLayer === l && <Check className="h-3 w-3 ml-auto" />}
               </button>
@@ -380,32 +603,93 @@ export default function FullscreenMap({
 
       {/* Légende */}
       <div className="absolute bottom-3 left-3 z-10">
-        <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-md overflow-hidden" style={{ minWidth: 175 }}>
-          <button onClick={() => setIsLegendOpen(p => !p)} className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-50 text-xs font-semibold text-gray-700">
+        <div
+          className="bg-white/95 backdrop-blur-sm rounded-lg shadow-md overflow-hidden"
+          style={{ minWidth: 185 }}
+        >
+          <button
+            onClick={() => setIsLegendOpen(p => !p)}
+            className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-50 text-xs font-semibold text-gray-700"
+          >
             <span>Légende</span>
-            {isLegendOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+            {isLegendOpen
+              ? <ChevronDown className="h-3 w-3" />
+              : <ChevronUp   className="h-3 w-3" />
+            }
           </button>
+
           {isLegendOpen && (
             <div className="px-3 pb-3 space-y-1.5 text-[11px] border-t border-gray-100">
-              {[{ color: "#3b82f6", label: "Poste" }].map(({ color, label }) => (
-                <div key={label} className="flex items-center gap-2 py-0.5">
-                  <div className="w-3 h-3 rounded-full shrink-0" style={{ background: color }} />
-                  <span className="text-gray-700">{label}</span>
-                </div>
-              ))}
+
+              {/* Postes */}
+              <div className="flex items-center gap-2 py-0.5">
+                <div className="w-3 h-3 rounded-full shrink-0" style={{ background: "#3b82f6" }} />
+                <span className="text-gray-700">Poste</span>
+              </div>
+
+              {/* Lignes */}
               <div className="border-t border-gray-100 pt-1.5 mt-1 space-y-1.5">
-                <div className="flex items-center gap-2"><div className="w-8 h-1 rounded shrink-0" style={{ background: wireColor }} /><span className="text-gray-700">Aérien</span></div>
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Lignes</p>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-1 rounded shrink-0" style={{ background: wireColor }} />
+                  <span className="text-gray-700">Aérien</span>
+                </div>
                 <div className="flex items-center gap-2">
                   <svg width="32" height="4" viewBox="0 0 32 4" className="shrink-0">
                     <line x1="0" y1="2" x2="32" y2="2" stroke={wireColor} strokeWidth="3" strokeDasharray="12 7" />
                   </svg>
-                  <span className="text-gray-700">Souterrain</span>
+                  <span className="text-gray-700">Souterrain / REAS</span>
                 </div>
               </div>
+
+              {/* Waypoints */}
               <div className="border-t border-gray-100 pt-1.5 mt-1 space-y-1.5">
-                <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-sm shrink-0 flex items-center justify-center text-white text-[8px] font-bold" style={{ background: "#22c55e" }}>S</div><span className="text-gray-700">Support</span></div>
-                <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-sm shrink-0 flex items-center justify-center text-white text-[8px] font-bold" style={{ background: "#f59e0b" }}>R</div><span className="text-gray-700">REAS</span></div>
-                <div className="flex items-center gap-2"><div className="w-3.5 h-3.5 rounded-sm shrink-0" style={{ background: "#22c55e" }} /><span className="text-gray-700">Balise / Marquage</span></div>
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Points</p>
+
+                {/* Support — carré vert */}
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 rounded-sm shrink-0 flex items-center justify-center text-white text-[8px] font-bold"
+                    style={{ background: "#22c55e" }}
+                  >S</div>
+                  <span className="text-gray-700">Support aérien</span>
+                </div>
+
+                {/* REAS — carré orange */}
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 rounded-sm shrink-0 flex items-center justify-center text-white text-[8px] font-bold"
+                    style={{ background: "#f59e0b" }}
+                  >R</div>
+                  <span className="text-gray-700">Remontée REAS</span>
+                </div>
+
+{/* Point remarquable — losange cyan (taille 16x16) */}
+<div className="flex items-center gap-2">
+  <svg width="16" height="16" viewBox="0 0 16 16" className="shrink-0">
+    <polygon points="8,1 15,8 8,15 1,8" fill="#06b6d4" stroke="white" strokeWidth="1.5" />
+    <text x="8" y="11.5" textAnchor="middle" fontSize="6" fontWeight="700" fill="white" fontFamily="sans-serif">P</text>
+  </svg>
+  <span className="text-gray-700">Point remarquable</span>
+</div>
+
+{/* OCR — cercle violet (taille 16x16) */}
+<div className="flex items-center gap-2">
+  <svg width="16" height="16" viewBox="0 0 16 16" className="shrink-0">
+    <circle cx="8" cy="8" r="6" fill="#8b5cf6" stroke="white" strokeWidth="1.5" />
+    <text x="8" y="11.5" textAnchor="middle" fontSize="6" fontWeight="700" fill="white" fontFamily="sans-serif">O</text>
+  </svg>
+  <span className="text-gray-700">OCR</span>
+</div>
+
+{/* Dérivation — pentagone orange (taille 16x16) */}
+<div className="flex items-center gap-2">
+  <svg width="16" height="16" viewBox="0 0 16 16" className="shrink-0">
+    <polygon points="8,2 14,6 12,13 4,13 2,6" fill="#f97316" stroke="white" strokeWidth="1.5" />
+    <text x="8" y="11.5" textAnchor="middle" fontSize="6" fontWeight="700" fill="white" fontFamily="sans-serif">D</text>
+  </svg>
+  <span className="text-gray-700">Dérivation</span>
+</div>
               </div>
             </div>
           )}
